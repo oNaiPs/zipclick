@@ -1,0 +1,394 @@
+{
+ "a.zip": {
+  "ZipClick": {
+   "median": 4.26,
+   "runs": [
+    5.21,
+    4.26,
+    3.85
+   ],
+   "complete": true
+  },
+  "7-Zip": {
+   "median": 3.96,
+   "runs": [
+    2.24,
+    4.14,
+    3.96
+   ],
+   "complete": true
+  },
+  "WinRAR": {
+   "median": 6.14,
+   "runs": [
+    6.14,
+    7.05,
+    6.05
+   ],
+   "complete": true
+  },
+  "Bandizip": {
+   "median": 2.83,
+   "runs": [
+    2.91,
+    2.7,
+    2.83
+   ],
+   "complete": true
+  },
+  "tar.exe": {
+   "median": 2.17,
+   "runs": [
+    2.34,
+    2.17,
+    2.15
+   ],
+   "complete": true
+  },
+  "Explorer": {
+   "median": 6.27,
+   "runs": [
+    6.63,
+    6.27,
+    5.46
+   ],
+   "complete": true
+  },
+  "Expand-Archive": {
+   "median": 5.89,
+   "runs": [
+    6.14,
+    5.75,
+    5.89
+   ],
+   "complete": true
+  }
+ },
+ "aes.zip": {
+  "ZipClick": {
+   "median": 3.44,
+   "runs": [
+    6.96,
+    3.44,
+    3.26
+   ],
+   "complete": true
+  },
+  "7-Zip": {
+   "median": 2.09,
+   "runs": [
+    2.06,
+    2.09,
+    2.11
+   ],
+   "complete": true
+  },
+  "WinRAR": {
+   "median": 3.02,
+   "runs": [
+    3.03,
+    3.02,
+    3.02
+   ],
+   "complete": true
+  },
+  "Bandizip": {
+   "median": 3.12,
+   "runs": [
+    3.12,
+    3.12,
+    3.19
+   ],
+   "complete": true
+  },
+  "tar.exe": {
+   "median": 1.88,
+   "runs": [
+    1.88,
+    1.89,
+    1.85
+   ],
+   "complete": true
+  }
+ },
+ "a.7z": {
+  "ZipClick": {
+   "median": 5.78,
+   "runs": [
+    9.79,
+    5.78,
+    5.64
+   ],
+   "complete": true
+  },
+  "7-Zip": {
+   "median": 1.31,
+   "runs": [
+    1.03,
+    1.31,
+    1.48
+   ],
+   "complete": true
+  },
+  "WinRAR": {
+   "median": 13.08,
+   "runs": [
+    13.08,
+    18.11,
+    9.06
+   ],
+   "complete": true
+  },
+  "Bandizip": {
+   "median": 1.47,
+   "runs": [
+    1.65,
+    1.47,
+    1.46
+   ],
+   "complete": true
+  },
+  "tar.exe": {
+   "median": 2.82,
+   "runs": [
+    4.38,
+    2.65,
+    2.82
+   ],
+   "complete": true
+  },
+  "Explorer": {
+   "median": 3.47,
+   "runs": [
+    3.67,
+    3.42,
+    3.47
+   ],
+   "complete": true
+  }
+ },
+ "a.rar": {
+  "ZipClick": {
+   "median": 2.96,
+   "runs": [
+    6.89,
+    2.89,
+    2.96
+   ],
+   "complete": true
+  },
+  "7-Zip": {
+   "median": 0.84,
+   "runs": [
+    0.84,
+    0.82,
+    0.84
+   ],
+   "complete": true
+  },
+  "WinRAR": {
+   "median": 2.02,
+   "runs": [
+    2.02,
+    2.02,
+    2.02
+   ],
+   "complete": true
+  },
+  "Bandizip": {
+   "median": 1.42,
+   "runs": [
+    1.42,
+    1.48,
+    1.42
+   ],
+   "complete": true
+  },
+  "tar.exe": {
+   "median": 1.75,
+   "runs": [
+    1.74,
+    1.79,
+    1.75
+   ],
+   "complete": true
+  },
+  "Explorer": {
+   "median": 2.38,
+   "runs": [
+    2.32,
+    2.49,
+    2.38
+   ],
+   "complete": true
+  }
+ },
+ "a.tar.gz": {
+  "ZipClick": {
+   "median": 2.33,
+   "runs": [
+    3.63,
+    2.24,
+    2.33
+   ],
+   "complete": true
+  },
+  "7-Zip": {
+   "median": 1.96,
+   "runs": [
+    1.97,
+    1.96,
+    1.92
+   ],
+   "complete": true
+  },
+  "WinRAR": {
+   "median": 2.02,
+   "runs": [
+    2.02,
+    2.01,
+    2.02
+   ],
+   "complete": true
+  },
+  "Bandizip": {
+   "median": 2.87,
+   "runs": [
+    2.87,
+    2.91,
+    2.78
+   ],
+   "complete": true
+  },
+  "tar.exe": {
+   "median": 1.05,
+   "runs": [
+    1.14,
+    1.05,
+    0.87
+   ],
+   "complete": true
+  },
+  "Explorer": {
+   "median": 1.64,
+   "runs": [
+    2.18,
+    1.63,
+    1.64
+   ],
+   "complete": true
+  }
+ },
+ "a.tar.xz": {
+  "ZipClick": {
+   "median": 5.95,
+   "runs": [
+    7.24,
+    5.91,
+    5.95
+   ],
+   "complete": true
+  },
+  "7-Zip": {
+   "median": 0.77,
+   "runs": [
+    0.77,
+    0.79,
+    0.76
+   ],
+   "complete": true
+  },
+  "WinRAR": {
+   "median": 4.03,
+   "runs": [
+    4.03,
+    4.04,
+    4.02
+   ],
+   "complete": true
+  },
+  "Bandizip": {
+   "median": 0.63,
+   "runs": [
+    0.63,
+    0.57,
+    0.63
+   ],
+   "complete": false
+  },
+  "tar.exe": {
+   "median": 2.69,
+   "runs": [
+    2.68,
+    2.69,
+    2.89
+   ],
+   "complete": true
+  },
+  "Explorer": {
+   "median": 3.58,
+   "runs": [
+    5.86,
+    3.58,
+    3.54
+   ],
+   "complete": true
+  }
+ },
+ "a.tar.zst": {
+  "ZipClick": {
+   "median": 0.62,
+   "runs": [
+    1.19,
+    0.57,
+    0.62
+   ],
+   "complete": true
+  },
+  "7-Zip": {
+   "median": 0.84,
+   "runs": [
+    1.05,
+    0.84,
+    0.78
+   ],
+   "complete": true
+  },
+  "WinRAR": {
+   "median": 1.02,
+   "runs": [
+    1.02,
+    1.02,
+    1.01
+   ],
+   "complete": true
+  },
+  "Bandizip": {
+   "median": 0.98,
+   "runs": [
+    0.55,
+    1.76,
+    0.98
+   ],
+   "complete": false
+  },
+  "tar.exe": {
+   "median": 0.82,
+   "runs": [
+    0.66,
+    1.03,
+    0.82
+   ],
+   "complete": true
+  },
+  "Explorer": {
+   "median": 1.79,
+   "runs": [
+    1.96,
+    1.79,
+    1.77
+   ],
+   "complete": true
+  }
+ }
+}

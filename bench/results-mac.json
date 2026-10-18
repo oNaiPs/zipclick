@@ -1,0 +1,30 @@
+{
+ "a.zip": {
+  "ZipClick": 1.41,
+  "7-Zip": 1.53
+ },
+ "aes.zip": {
+  "ZipClick": 1.8,
+  "7-Zip": 2.36
+ },
+ "a.7z": {
+  "ZipClick": 6.42,
+  "7-Zip": 1.93
+ },
+ "a.rar": {
+  "ZipClick": 1.81,
+  "rar": 0.61
+ },
+ "a.tar.gz": {
+  "ZipClick": 1.48,
+  "gzip + tar": 1.2
+ },
+ "a.tar.xz": {
+  "ZipClick": 5.01,
+  "xz (1 thread) + tar": 2.16
+ },
+ "a.tar.zst": {
+  "ZipClick": 0.25,
+  "zstd + tar": 0.37
+ }
+}

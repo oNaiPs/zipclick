@@ -14,14 +14,16 @@ import (
 
 var errWindowsOnly = errors.New("only available on Windows")
 
-func oemCodePage() uint32  { return 437 }
-func hide(string)          {}
-func unhide(string)        {}
-func notifyCreated(string) {}
-func reveal(string)        {}
-func install() error       { return errWindowsOnly }
-func uninstall() error     { return errWindowsOnly }
-func status() error        { return errWindowsOnly }
+func oemCodePage() uint32     { return 437 }
+func hide(string)             {}
+func unhide(string)           {}
+func notifyCreated(string)    {}
+func reveal(string)           {}
+func zoneOf(string) []byte    { return nil }
+func markZone(string, []byte) {}
+func install() error          { return errWindowsOnly }
+func uninstall() error        { return errWindowsOnly }
+func status() error           { return errWindowsOnly }
 
 // freeSpace is how many bytes may still be written on dir's file system.
 func freeSpace(dir string) (uint64, bool) {

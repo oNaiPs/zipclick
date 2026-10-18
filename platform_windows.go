@@ -482,3 +482,41 @@ func utf16(s string) *uint16 {
 	p, _ := windows.UTF16PtrFromString(s)
 	return p
 }
+
+// zoneStream is the NTFS stream that holds a file's Mark of the Web: the
+// zone it was downloaded from, which SmartScreen, Office's Protected View
+// and its macro blocking go by. Explorer and 7-Zip copy an archive's mark
+// to what they extract; without it, a program or document from a
+// downloaded zip opens as if it had been made on this computer.
+const zoneStream = ":Zone.Identifier"
+
+// maxZone bounds what is read of an archive's mark. A real one is a few
+// hundred bytes; anything bigger is replaced by internetZone.
+const maxZone = 64 << 10
+
+var internetZone = []byte("[ZoneTransfer]\r\nZoneId=3\r\n")
+
+// zoneOf returns the archive's Mark of the Web, or nil when it has none. A
+// mark that is there but cannot be read, or is empty or oversized, counts
+// as the Internet zone: the safe side is to warn.
+func zoneOf(archive string) []byte {
+	f, err := os.Open(archive + zoneStream)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+	b, err := io.ReadAll(io.LimitReader(f, maxZone+1))
+	if err != nil || len(b) == 0 || len(b) > maxZone {
+		return internetZone
+	}
+	return b
+}
+
+// markZone gives path the Mark of the Web zone. File systems without
+// streams (FAT, exFAT, some network shares) cannot hold one; Explorer drops
+// it there too, so a failure is not an error.
+func markZone(path string, zone []byte) {
+	if zone != nil {
+		_ = os.WriteFile(path+zoneStream, zone, 0o644)
+	}
+}

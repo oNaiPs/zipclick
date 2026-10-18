@@ -84,7 +84,7 @@ func TestTheFreeSpaceGuardChecksAsItWrites(t *testing.T) {
 	m := &member{name: "x", size: -1, open: func() (io.ReadCloser, error) {
 		return io.NopCloser(bytes.NewReader(make([]byte, checkInterval+1))), nil
 	}}
-	if err := writeFile(filepath.Join(dir, "x"), m, nil, nil); !errors.Is(err, ErrDiskFull) {
+	if err := writeFile(filepath.Join(dir, "x"), m, nil, nil, nil); !errors.Is(err, ErrDiskFull) {
 		t.Fatalf("err = %v after %d checks, want ErrDiskFull", err, calls)
 	}
 }
@@ -94,7 +94,7 @@ func TestAMemberCannotOutgrowItsHeader(t *testing.T) {
 	m := &member{name: "x", size: 10, open: func() (io.ReadCloser, error) {
 		return io.NopCloser(bytes.NewReader(make([]byte, 11))), nil
 	}}
-	if err := writeFile(filepath.Join(dir, "x"), m, nil, nil); !errors.Is(err, errTooLong) {
+	if err := writeFile(filepath.Join(dir, "x"), m, nil, nil, nil); !errors.Is(err, errTooLong) {
 		t.Fatalf("err = %v, want errTooLong", err)
 	}
 }

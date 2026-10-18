@@ -143,7 +143,7 @@ func Extract(archive, password string, p *Progress) (dst string, err error) {
 	hide(stage)
 	defer removeStage(stage) // no-op once renamed away
 
-	tops, err := writeAll(stage, src, p)
+	tops, err := writeAll(stage, src, p, zoneOf(archive))
 	if err != nil {
 		return "", err
 	}
@@ -329,8 +329,8 @@ func uniquePath(dir, name string) string {
 // unsafe. Streams (tar, rar, solid 7z) are written member by member as they
 // are read; a zip, whose members can be read in any order, is planned first
 // and its files written several at a time.
-func writeAll(root string, src source, p *Progress) ([]string, error) {
-	w := &writer{root: root, p: p, seen: map[string]bool{}, dirTimes: map[string]time.Time{}}
+func writeAll(root string, src source, p *Progress, zone []byte) ([]string, error) {
+	w := &writer{root: root, p: p, zone: zone, seen: map[string]bool{}, dirTimes: map[string]time.Time{}}
 	if !src.countsInput() {
 		w.count = p
 	}
@@ -380,6 +380,7 @@ type writer struct {
 	root     string
 	p        *Progress // cancels; may be nil
 	count    *Progress // advanced by bytes written, unless the source counts input
+	zone     []byte    // the archive's Mark of the Web, given to every file; nil if none
 	tops     []string
 	seen     map[string]bool
 	dirTimes map[string]time.Time
@@ -419,7 +420,9 @@ func (w *writer) place(m *member) (*job, error) {
 	}
 	if m.hardlink != "" {
 		if target, ok := safeRel(m.hardlink); ok {
-			_ = linkOrCopy(filepath.Join(w.root, filepath.FromSlash(target)), dst)
+			if linkOrCopy(filepath.Join(w.root, filepath.FromSlash(target)), dst) == nil {
+				markZone(dst, w.zone) // a copy has no streams; a link already has it
+			}
 		}
 		return nil, nil
 	}
@@ -447,7 +450,7 @@ func (w *writer) write(j *job, stopped func() bool) error {
 			return err
 		}
 	}
-	if err := writeFile(j.dst, j.m, stopped, w.count); err != nil {
+	if err := writeFile(j.dst, j.m, w.zone, stopped, w.count); err != nil {
 		if errors.Is(err, ErrCancelled) || errors.Is(err, ErrBadPassword) || errors.Is(err, ErrEncrypted) || errors.Is(err, ErrDiskFull) {
 			return err
 		}
@@ -536,9 +539,10 @@ func (w *writer) setDirTimes() {
 	}
 }
 
-// writeFile writes one member to dst. stopped, when not nil, is checked on
+// writeFile writes one member to dst and marks it with zone, the archive's
+// Mark of the Web, when that is not nil. stopped, when not nil, is checked on
 // every buffer; count, when not nil, is advanced by the bytes written.
-func writeFile(dst string, m *member, stopped func() bool, count *Progress) error {
+func writeFile(dst string, m *member, zone []byte, stopped func() bool, count *Progress) error {
 	rc, err := m.open()
 	if err != nil {
 		return err
@@ -586,6 +590,8 @@ func writeFile(dst string, m *member, stopped func() bool, count *Progress) erro
 	if err := out.Close(); err != nil {
 		return err
 	}
+	// Before the times: writing a stream counts as modifying the file.
+	markZone(dst, zone)
 	if !m.mtime.IsZero() {
 		_ = os.Chtimes(dst, m.mtime, m.mtime)
 	}

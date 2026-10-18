@@ -172,7 +172,7 @@ func TestADecoderPanicInTheCopyGoroutineIsAnError(t *testing.T) {
 	m := &member{name: "x", size: 2 * copyChunk, open: func() (io.ReadCloser, error) {
 		return io.NopCloser(panicReader{}), nil
 	}}
-	if err := writeFile(filepath.Join(dir, "x"), m, nil, nil); !errors.Is(err, errDamaged) {
+	if err := writeFile(filepath.Join(dir, "x"), m, nil, nil, nil); !errors.Is(err, errDamaged) {
 		t.Fatalf("err = %v, want errDamaged", err)
 	}
 }

@@ -11,13 +11,30 @@ import (
 // sevenZipSource reads a 7z. Members are read in archive order, which is
 // what keeps solid archives from being decompressed more than once.
 type sevenZipSource struct {
-	r        *sevenzip.ReadCloser
+	r        *sevenzip.Reader
+	f        *os.File
 	i        int
 	password string
 }
 
-func open7z(path, password string, p *Progress) (source, error) {
-	r, err := sevenzip.OpenReaderWithPassword(path, password)
+func open7z(path, password string, p *Progress) (src source, err error) {
+	// The file is opened here, not by the library, so that it is closed even
+	// when a crafted header makes the library panic: Windows keeps an open
+	// file locked against deletion.
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if src == nil {
+			f.Close()
+		}
+	}()
+	fi, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	r, err := sevenzip.NewReaderWithPassword(f, fi.Size(), password)
 	if err != nil {
 		return nil, sevenZipError(err, password)
 	}
@@ -26,7 +43,7 @@ func open7z(path, password string, p *Progress) (source, error) {
 		total += int64(f.UncompressedSize)
 	}
 	p.setTotal(total)
-	return &sevenZipSource{r: r, password: password}, nil
+	return &sevenZipSource{r: r, f: f, password: password}, nil
 }
 
 func (s *sevenZipSource) next() (*member, error) {
@@ -54,7 +71,7 @@ func (s *sevenZipSource) next() (*member, error) {
 }
 
 func (s *sevenZipSource) countsInput() bool { return false }
-func (s *sevenZipSource) Close() error      { return s.r.Close() }
+func (s *sevenZipSource) Close() error      { return s.f.Close() }
 
 type sevenZipReader struct {
 	io.ReadCloser

@@ -2,9 +2,9 @@ package main
 
 import (
 	"archive/zip"
+	"bufio"
 	"bytes"
 	"compress/bzip2"
-	"compress/flate"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/hmac"
@@ -18,6 +18,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/klauspost/compress/flate"
 	"github.com/klauspost/compress/zstd"
 	"github.com/oNaiPs/zipclick/internal/deflate64"
 	"github.com/ulikunitz/xz"
@@ -50,10 +51,16 @@ func openZip(path, password string, p *Progress) (src source, err error) {
 	if err != nil {
 		return nil, err
 	}
-	r, err := zip.NewReader(newBlockReaderAt(f), fi.Size())
+	// The file itself, not a read-ahead cache: members are read by several
+	// goroutines at once (pread is fine with that), each through its own
+	// buffer, set up in openZipFile and by the decompressor below.
+	r, err := zip.NewReader(f, fi.Size())
 	if err != nil {
 		return nil, err
 	}
+	r.RegisterDecompressor(zip.Deflate, func(r io.Reader) io.ReadCloser {
+		return flate.NewReader(bufio.NewReaderSize(r, readAheadSize))
+	})
 	var total int64
 	encrypted := false
 	for _, f := range r.File {
@@ -86,6 +93,7 @@ func (s *zipSource) next() (*member, error) {
 }
 
 func (s *zipSource) countsInput() bool { return false }
+func (s *zipSource) parallel() bool    { return true }
 func (s *zipSource) Close() error      { return s.f.Close() }
 
 // The compression methods ZipClick reads: Store and Deflate, which archive/zip
@@ -136,10 +144,11 @@ func openZipFile(f *zip.File, password string, oem *charmap.Charmap) (io.ReadClo
 	if !ok {
 		return nil, &MethodError{method}
 	}
-	raw, err := f.OpenRaw()
+	rawSection, err := f.OpenRaw()
 	if err != nil {
 		return nil, err
 	}
+	raw := bufio.NewReaderSize(rawSection, readAheadSize)
 	var r io.Reader = raw
 	var auth func() error
 	switch {

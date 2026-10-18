@@ -7,8 +7,10 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 	"unicode/utf8"
@@ -323,12 +325,16 @@ func uniquePath(dir, name string) string {
 
 // writeAll extracts every member of src under root and returns the
 // top-level names it created, in order, without macOS metadata or anything
-// unsafe.
+// unsafe. Streams (tar, rar, solid 7z) are written member by member as they
+// are read; a zip, whose members can be read in any order, is planned first
+// and its files written several at a time.
 func writeAll(root string, src source, p *Progress) ([]string, error) {
-	var tops []string
-	seen := map[string]bool{}
-	dirTimes := map[string]time.Time{}
-	countOutput := !src.countsInput()
+	w := &writer{root: root, p: p, seen: map[string]bool{}, dirTimes: map[string]time.Time{}}
+	if !src.countsInput() {
+		w.count = p
+	}
+	ps, parallel := src.(parallelSource)
+	parallel = parallel && ps.parallel()
 	for {
 		if p.stopped() {
 			return nil, ErrCancelled
@@ -340,65 +346,179 @@ func writeAll(root string, src source, p *Progress) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		rel, ok := safeRel(m.name)
-		if !ok || m.skip || isMacJunk(rel) {
-			continue
-		}
-		first, _, _ := strings.Cut(rel, "/")
-		if k := strings.ToLower(first); !seen[k] {
-			seen[k] = true
-			tops = append(tops, first)
-		}
-		dst := filepath.Join(root, filepath.FromSlash(rel))
-		if m.dir || strings.HasSuffix(m.name, "/") {
-			if err := os.MkdirAll(dst, 0o755); err != nil {
-				return nil, err
-			}
-			dirTimes[dst] = m.mtime
-			continue
-		}
-		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		j, err := w.place(m)
+		if err != nil {
 			return nil, err
 		}
-		if m.hardlink != "" {
-			if target, ok := safeRel(m.hardlink); ok {
-				_ = linkOrCopy(filepath.Join(root, filepath.FromSlash(target)), dst)
-			}
+		if j == nil {
 			continue
 		}
-		var pw *Progress
-		if countOutput {
-			pw = p
-		}
-		if m.size > 0 {
-			if err := roomFor(root, m.size); err != nil {
-				return nil, err
-			}
-		}
-		if err := writeFile(dst, m, p, pw); err != nil {
-			if errors.Is(err, ErrCancelled) || errors.Is(err, ErrBadPassword) || errors.Is(err, ErrEncrypted) || errors.Is(err, ErrDiskFull) {
-				return nil, err
-			}
-			return nil, fmt.Errorf("%s: %w", rel, err)
+		if parallel {
+			w.jobs = append(w.jobs, j)
+		} else if err := w.write(j, p.stopped); err != nil {
+			return nil, err
 		}
 	}
-	// Directory times last, deepest first: writing into a directory bumps it.
-	dirs := make([]string, 0, len(dirTimes))
-	for d := range dirTimes {
+	if err := w.writeJobs(); err != nil {
+		return nil, err
+	}
+	w.setDirTimes()
+	return w.tops, nil
+}
+
+// parallelSource is a source whose members can be opened and read in any
+// order and at the same time: a zip.
+type parallelSource interface {
+	parallel() bool
+}
+
+// maxWriters is how many files of a zip are extracted at once.
+var maxWriters = min(runtime.GOMAXPROCS(0), 8)
+
+type writer struct {
+	root     string
+	p        *Progress // cancels; may be nil
+	count    *Progress // advanced by bytes written, unless the source counts input
+	tops     []string
+	seen     map[string]bool
+	dirTimes map[string]time.Time
+	jobs     []*job
+}
+
+// job is one file to write.
+type job struct {
+	m   *member
+	rel string
+	dst string
+}
+
+// place makes the folders a member needs and returns the file to write for
+// it, or nil when there is none (a folder, a link, something skipped).
+func (w *writer) place(m *member) (*job, error) {
+	rel, ok := safeRel(m.name)
+	if !ok || m.skip || isMacJunk(rel) {
+		return nil, nil
+	}
+	first, _, _ := strings.Cut(rel, "/")
+	if k := strings.ToLower(first); !w.seen[k] {
+		w.seen[k] = true
+		w.tops = append(w.tops, first)
+	}
+	dst := filepath.Join(w.root, filepath.FromSlash(rel))
+	if m.dir || strings.HasSuffix(m.name, "/") {
+		if err := os.MkdirAll(dst, 0o755); err != nil {
+			return nil, err
+		}
+		w.dirTimes[dst] = m.mtime
+		return nil, nil
+	}
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return nil, err
+	}
+	if m.hardlink != "" {
+		if target, ok := safeRel(m.hardlink); ok {
+			_ = linkOrCopy(filepath.Join(w.root, filepath.FromSlash(target)), dst)
+		}
+		return nil, nil
+	}
+	return &job{m: m, rel: rel, dst: dst}, nil
+}
+
+func (w *writer) write(j *job, stopped func() bool) error {
+	if j.m.size > 0 {
+		if err := roomFor(w.root, j.m.size); err != nil {
+			return err
+		}
+	}
+	if err := writeFile(j.dst, j.m, stopped, w.count); err != nil {
+		if errors.Is(err, ErrCancelled) || errors.Is(err, ErrBadPassword) || errors.Is(err, ErrEncrypted) || errors.Is(err, ErrDiskFull) {
+			return err
+		}
+		return fmt.Errorf("%s: %w", j.rel, err)
+	}
+	return nil
+}
+
+// writeJobs writes the planned files of a zip, maxWriters at a time. The
+// first error stops the others. Two members with the same name (a later one
+// replaces an earlier one) are written one after another instead, in order.
+func (w *writer) writeJobs() error {
+	if len(w.jobs) == 0 {
+		return nil
+	}
+	names := map[string]bool{}
+	for _, j := range w.jobs {
+		k := strings.ToLower(j.dst)
+		if names[k] {
+			for _, j := range w.jobs {
+				if err := w.write(j, w.p.stopped); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+		names[k] = true
+	}
+
+	var (
+		failed   atomic.Bool
+		mu       sync.Mutex
+		firstErr error
+		wg       sync.WaitGroup
+	)
+	stopped := func() bool { return failed.Load() || w.p.stopped() }
+	next := make(chan *job)
+	for range min(maxWriters, len(w.jobs)) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := range next {
+				if stopped() {
+					continue
+				}
+				if err := w.write(j, stopped); err != nil {
+					mu.Lock()
+					if firstErr == nil && !(failed.Load() && errors.Is(err, ErrCancelled)) {
+						firstErr = err
+					}
+					mu.Unlock()
+					failed.Store(true)
+				}
+			}
+		}()
+	}
+	for _, j := range w.jobs {
+		next <- j
+	}
+	close(next)
+	wg.Wait()
+	if firstErr != nil {
+		return firstErr
+	}
+	if w.p.stopped() {
+		return ErrCancelled
+	}
+	return nil
+}
+
+// setDirTimes sets folder times last, deepest first: writing into a folder
+// bumps its time.
+func (w *writer) setDirTimes() {
+	dirs := make([]string, 0, len(w.dirTimes))
+	for d := range w.dirTimes {
 		dirs = append(dirs, d)
 	}
 	sort.Sort(sort.Reverse(sort.StringSlice(dirs)))
 	for _, d := range dirs {
-		if t := dirTimes[d]; !t.IsZero() {
+		if t := w.dirTimes[d]; !t.IsZero() {
 			_ = os.Chtimes(d, t, t)
 		}
 	}
-	return tops, nil
 }
 
-// writeFile writes one member to dst. cancel is checked on every buffer;
-// count, when not nil, is advanced by the bytes written.
-func writeFile(dst string, m *member, cancel, count *Progress) error {
+// writeFile writes one member to dst. stopped, when not nil, is checked on
+// every buffer; count, when not nil, is advanced by the bytes written.
+func writeFile(dst string, m *member, stopped func() bool, count *Progress) error {
 	rc, err := m.open()
 	if err != nil {
 		return err
@@ -417,8 +537,17 @@ func writeFile(dst string, m *member, cancel, count *Progress) error {
 	if m.size >= 0 {
 		r = io.LimitReader(rc, m.size+1)
 	}
-	w := &progressWriter{w: out, cancel: cancel, count: count, dir: filepath.Dir(dst)}
-	n, err := io.CopyBuffer(w, r, make([]byte, 256<<10))
+	w := &progressWriter{w: out, stopped: stopped, count: count, dir: filepath.Dir(dst)}
+	var n int64
+	if m.size >= 0 && m.size <= copyChunk {
+		// Small enough to decode in one go: a second goroutine would only
+		// add a hand-off.
+		buf := chunks.Get().(*[]byte)
+		n, err = io.CopyBuffer(w, r, *buf)
+		chunks.Put(buf)
+	} else {
+		n, err = copyOverlapped(w, r)
+	}
 	if err == nil && m.size >= 0 && n > m.size {
 		err = errTooLong
 	}
@@ -433,6 +562,96 @@ func writeFile(dst string, m *member, cancel, count *Progress) error {
 		_ = os.Chtimes(dst, m.mtime, m.mtime)
 	}
 	return nil
+}
+
+// copyChunk is how much copyOverlapped decodes ahead of the disk at a time.
+const copyChunk = 1 << 20
+
+// chunks recycles copy buffers: allocating fresh ones for each of thousands
+// of files cost more than the copying, for fast formats like zstd.
+var chunks = sync.Pool{New: func() any {
+	b := make([]byte, copyChunk)
+	return &b
+}}
+
+// copyOverlapped copies r to w like io.Copy, but reads (that is, decodes)
+// in its own goroutine, so the next chunk is decompressed while the disk
+// writes this one. It returns once both sides have stopped; r is never read
+// after it returns.
+func copyOverlapped(w io.Writer, r io.Reader) (int64, error) {
+	type chunk struct {
+		b []byte
+		n int
+	}
+	full := make(chan chunk, 2)
+	empty := make(chan []byte, 3)
+	var bufs []*[]byte
+	for range 3 {
+		b := chunks.Get().(*[]byte)
+		bufs = append(bufs, b)
+		empty <- *b
+	}
+	// Returned to the pool only once both goroutines are done with them.
+	defer func() {
+		for _, b := range bufs {
+			chunks.Put(b)
+		}
+	}()
+	stop := make(chan struct{})
+	var rerr error
+	go func() {
+		defer close(full)
+		for {
+			var b []byte
+			select {
+			case b = <-empty:
+			case <-stop:
+				return
+			}
+			n, err := fill(r, b)
+			if n > 0 {
+				full <- chunk{b, n}
+			}
+			if err != nil {
+				if err != io.EOF {
+					rerr = err
+				}
+				return
+			}
+		}
+	}()
+	var written int64
+	var werr error
+	for c := range full {
+		if werr == nil {
+			n, err := w.Write(c.b[:c.n])
+			written += int64(n)
+			if err != nil {
+				werr = err
+				close(stop)
+			}
+		}
+		empty <- c.b
+	}
+	if werr != nil {
+		return written, werr
+	}
+	return written, rerr
+}
+
+// fill reads into b until it is full, the data ends (io.EOF) or r fails.
+// Unlike io.ReadFull it keeps a decoder's own io.ErrUnexpectedEOF, which
+// means a truncated archive, as an error.
+func fill(r io.Reader, b []byte) (int, error) {
+	n := 0
+	for n < len(b) {
+		m, err := r.Read(b[n:])
+		n += m
+		if err != nil {
+			return n, err
+		}
+	}
+	return n, nil
 }
 
 // linkOrCopy gives dst the contents of the already extracted src.
@@ -480,15 +699,15 @@ func oemDecoder() *charmap.Charmap {
 // progressWriter counts what passes through it and fails once cancelled, which
 // stops io.Copy within one buffer of the request.
 type progressWriter struct {
-	w      io.Writer
-	cancel *Progress
-	count  *Progress
-	dir    string // checked for free space every checkInterval bytes
-	since  int64
+	w       io.Writer
+	stopped func() bool
+	count   *Progress
+	dir     string // checked for free space every checkInterval bytes
+	since   int64
 }
 
 func (pw *progressWriter) Write(b []byte) (int, error) {
-	if pw.cancel.stopped() {
+	if pw.stopped != nil && pw.stopped() {
 		return 0, ErrCancelled
 	}
 	if pw.since += int64(len(b)); pw.since >= checkInterval {

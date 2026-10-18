@@ -68,14 +68,22 @@ func TestDuplicateZipNamesStillLetTheLastOneWin(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	got := map[string]string{}
 	ents, _ := os.ReadDir(dst)
-	var got []string
 	for _, e := range ents {
 		b, _ := os.ReadFile(filepath.Join(dst, e.Name()))
-		got = append(got, string(b))
+		got[e.Name()] = string(b)
 	}
-	// One file, whichever case the file system kept, holding the later body.
-	if strings.Join(got, ",") != "second,b" && strings.Join(got, ",") != "b,second" {
+	switch len(got) {
+	case 2: // case-insensitive (Windows, macOS): one file, the later body
+		if got["b.txt"] != "b" || (got["a.txt"] != "second" && got["A.TXT"] != "second") {
+			t.Fatalf("contents %v", got)
+		}
+	case 3: // case-sensitive (Linux): two files, each its own body
+		if got["a.txt"] != "first" || got["A.TXT"] != "second" || got["b.txt"] != "b" {
+			t.Fatalf("contents %v", got)
+		}
+	default:
 		t.Fatalf("contents %v", got)
 	}
 }

@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ZipClick: double-click a zip on Windows to extract it</title>
+<meta name="description" content="A small free program that makes double-clicking a .zip file on Windows extract it next to the zip, the way it works on a Mac.">
+<link rel="icon" href="img/favicon-32.png">
+<style>
+  :root {
+    --bg: #fbfaf7;
+    --text: #1f1d1a;
+    --muted: #615b52;
+    --rule: #e4dfd5;
+    --accent: #f2c14e;
+    --accent-ink: #2b2205;
+    --link: #1f5fbf;
+    --shot-border: #d8d2c6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1b1a18;
+      --text: #ece8e1;
+      --muted: #a8a196;
+      --rule: #34312c;
+      --link: #8ab4f8;
+      --shot-border: #3b3833;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 17px/1.6 "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  }
+  main { max-width: 680px; margin: 0 auto; padding: 48px 20px 64px; }
+  a { color: var(--link); }
+  h1 { font-size: 1rem; margin: 0 0 28px; display: flex; align-items: center; gap: 10px; font-weight: 600; }
+  h1 img { width: 32px; height: 32px; }
+  .lede { font-size: 1.9rem; line-height: 1.25; font-weight: 600; margin: 0 0 18px; letter-spacing: -0.01em; }
+  h2 { font-size: 1.15rem; margin: 48px 0 8px; padding-top: 24px; border-top: 1px solid var(--rule); }
+  p { margin: 0 0 14px; }
+  .download { margin: 26px 0 8px; }
+  .button {
+    display: inline-block;
+    background: var(--accent);
+    color: var(--accent-ink);
+    text-decoration: none;
+    font-weight: 600;
+    padding: 11px 18px;
+    border-radius: 6px;
+    border: 1px solid #d9a52c;
+  }
+  .button:hover { background: #f5cd6a; }
+  .small { color: var(--muted); font-size: 0.9rem; }
+  video, .shot {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    border: 1px solid var(--shot-border);
+    border-radius: 6px;
+  }
+  video { margin: 32px 0 8px; }
+  .shot { margin: 14px 0 18px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08); }
+  ol { padding-left: 1.3em; margin: 0 0 14px; }
+  li { margin-bottom: 10px; }
+  dt { font-weight: 600; margin-top: 18px; }
+  dd { margin: 4px 0 0; }
+  code { font-family: Consolas, "SF Mono", Menlo, monospace; font-size: 0.92em; }
+  footer { margin-top: 56px; padding-top: 20px; border-top: 1px solid var(--rule); color: var(--muted); font-size: 0.9rem; }
+</style>
+</head>
+<body>
+<main>
+
+<h1><img src="img/icon-64.png" alt="">ZipClick</h1>
+
+<p class="lede">Double-click a zip file on Windows and get the files, like on a Mac.</p>
+
+<p>Normally, double-clicking a zip on Windows opens it as if it were a folder. To actually get the files out you have to right-click, choose Extract All, confirm where they should go, and then close the extra window that pops up. ZipClick replaces all of that with the double-click: the files appear right next to the zip.</p>
+
+<div class="download">
+  <a class="button" href="https://github.com/oNaiPs/zipclick/releases/latest/download/ZipClick.exe">Download ZipClick for Windows 10 and 11</a>
+</div>
+<p class="small">Version 0.3.1, 2.7 MB, free. Got a Snapdragon (ARM) laptop? Use the <a href="https://github.com/oNaiPs/zipclick/releases/latest/download/ZipClick-arm64.exe">ARM64 version</a> instead.</p>
+
+<video src="demo.mp4" poster="img/demo-poster.png" autoplay muted loop playsinline aria-label="Double-clicking three zip files in Explorer. Each one is extracted next to itself and selected. The large one shows a progress window first."></video>
+<p class="small">Three double-clicks. The last zip is 1.2 GB, so a progress window shows up for a few seconds.</p>
+
+<h2>What happens when you double-click a zip</h2>
+<p>If the zip contains one folder or one file, that's what you get, sitting next to the zip. If it contains a bunch of loose files, they go into a new folder with the zip's name, so they don't spill all over your Downloads.</p>
+<p>ZipClick never replaces anything you already have. If there's already a folder called "Photos", the new one is called "Photos 2".</p>
+<p>When it's done, the new folder is selected in the window you were looking at, so you can open it straight away. Large zips get a small progress window, and Cancel really does cancel: nothing half-extracted is left lying around.</p>
+<img class="shot" src="img/progress.png" width="421" height="139" alt="The ZipClick progress window: Extracting Big dataset.zip, 606.5 MB of 1.2 GB, with a Cancel button.">
+
+<h2>Installing</h2>
+<ol>
+  <li>Download ZipClick.exe and open it.</li>
+  <li>Windows will probably show a blue "Windows protected your PC" box the first time. That's because I haven't paid for a code-signing certificate yet, not because something is wrong. Click <b>More info</b>, then <b>Run anyway</b>.</li>
+  <li>ZipClick asks if you want zip files to work this way. Click <b>Yes</b>.
+    <img class="shot" src="img/install-prompt.png" width="397" height="171" alt="ZipClick asks: Make double-clicking a .zip file extract it, like on a Mac? With Yes and No buttons.">
+  </li>
+  <li>Windows Settings opens on ZipClick's page. Click the box under <b>.zip</b>, choose <b>ZipClick</b>, then <b>Set default</b>. Windows insists that you make this choice yourself; programs aren't allowed to do it for you.
+    <img class="shot" src="img/default-app.png" width="446" height="258" alt="The Windows Settings dialog 'Select a default app for .zip files', with ZipClick selected.">
+  </li>
+</ol>
+<p>That's it. You don't need to be an administrator, and you don't need to restart anything.</p>
+
+<h2>When a zip can't be extracted</h2>
+<p>Some zips are protected with a password, and some very large ones use a compression method ZipClick doesn't read. In those cases it tells you, and points you to Windows' own Extract All, which handles both.</p>
+<img class="shot" src="img/error.png" width="379" height="197" alt="ZipClick message: Could not extract Password protected.zip. The archive is password-protected. Right-click the file, Extract All, to use Windows' own extractor instead.">
+
+<h2>Questions</h2>
+<dl>
+  <dt>Can I still look inside a zip without extracting it?</dt>
+  <dd>Yes. Right-click it, choose Open with, then File Explorer.</dd>
+
+  <dt>Does it work with .rar or .7z files?</dt>
+  <dd>No, only .zip.</dd>
+
+  <dt>Does it connect to the internet or collect anything?</dt>
+  <dd>No. It has no network code at all. When it extracts, it only writes inside the folder where your zip is. You can read the <a href="https://github.com/oNaiPs/zipclick">source code</a> if you want to check.</dd>
+
+  <dt>What languages does it speak?</dt>
+  <dd>English, Portuguese (Portugal and Brazil), Spanish, French, German and Italian. It follows your Windows display language.</dd>
+
+  <dt>How do I remove it?</dt>
+  <dd>Settings &gt; Apps &gt; Installed apps, find ZipClick, then Uninstall. Zip files go back to opening like folders.</dd>
+</dl>
+
+<footer>
+  ZipClick is made by Jose Pereira. The <a href="https://github.com/oNaiPs/zipclick">source is on GitHub</a>, along with the <a href="https://github.com/oNaiPs/zipclick/releases">list of changes</a>. Found a zip it gets wrong? <a href="https://github.com/oNaiPs/zipclick/issues">Open an issue</a>.
+</footer>
+
+</main>
+</body>
+</html>

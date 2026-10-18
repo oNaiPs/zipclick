@@ -1,39 +1,38 @@
 # ZipClick
 
-Double-click a `.zip` on Windows and it is extracted — the way Archive Utility
-does it on macOS — instead of being opened as a folder.
+ZipClick makes double-clicking a .zip file on Windows extract it, the way it works on a Mac.
 
-![Double-clicking zips in Explorer: each one is extracted next to itself and selected; a large one shows a progress window](docs/demo.gif)
+![Double-clicking three zip files in Explorer. Each one is extracted next to itself and the result is selected. The large one shows a progress window first.](docs/demo.gif)
 
-- **One item inside** (a folder or a file) → that item appears next to the zip.
-- **Several items** → a folder named after the zip, next to it.
-- **Never overwrites**: `name 2`, `name 3`… if the name is taken.
-- The result is **selected** in the Explorer window you double-clicked in.
-- Anything that takes more than a moment gets a **progress window** with the
-  size, time left and Cancel — which leaves nothing behind.
-- Speaks English, Portuguese (Portugal and Brazil), Spanish, French, German and
-  Italian, following the Windows display language.
-- `__MACOSX/` and `.DS_Store` from Mac-made zips are dropped; names are decoded
-  from the OEM code page when the zip didn't use UTF-8, and macOS's decomposed
-  accents are normalised.
-- Extraction goes into a hidden staging folder and is renamed into place, so a
-  failure never leaves a half-extracted result. Traversal (`../`), absolute
-  paths and names Windows can't hold (`CON`, `a:b`, trailing dots) are made safe.
+On Windows, double-clicking a zip opens it like a folder. To get the files out you right-click, choose Extract All, confirm where they should go, and then deal with the second window that opens. With ZipClick the double-click puts the files next to the zip and you carry on.
+
+Website: https://onaips.github.io/zipclick/
 
 ## Install
 
-Run `zipclick.exe` and say yes. It copies itself to
-`%LOCALAPPDATA%\Programs\ZipClick`, registers for `.zip` (per user, no admin),
-and opens **Settings → Default apps → ZipClick**: click `.zip` and pick
-ZipClick. Windows does not let any program make itself the default, so that one
-click is yours.
+Download [ZipClick.exe](https://github.com/oNaiPs/zipclick/releases/latest/download/ZipClick.exe) and run it ([ARM64 build](https://github.com/oNaiPs/zipclick/releases/latest/download/ZipClick-arm64.exe) for Snapdragon PCs). It installs for your user only, without admin rights, and then opens the Default apps page in Settings, where you pick ZipClick for .zip files. Windows doesn't let a program make itself the default, so that one click has to be yours.
 
-Until then, every `.zip` already has **Extract here (ZipClick)** in its
-right-click menu (under *Show more options* on Windows 11).
+The exe isn't code-signed yet, so SmartScreen warns the first time you run it. Click More info, then Run anyway.
 
-To open a zip as a folder afterwards: right-click → *Open with* → *Windows Explorer*.
+To remove it, go to Settings > Apps > Installed apps, find ZipClick and choose Uninstall.
 
-Uninstall from *Settings → Apps → Installed apps*, or `zipclick uninstall`.
+## What happens when you double-click
+
+If the zip holds a single folder or file, that item appears next to the zip. If it holds several things, they go into a new folder named after the zip. Nothing is ever overwritten: if the name is taken you get "Photos 2", then "Photos 3".
+
+The new item is selected in the Explorer window you were using. A big archive shows a small progress window with a Cancel button. Cancelling leaves nothing behind, because ZipClick extracts into a hidden folder and only renames it into place once everything is written.
+
+Zips made on a Mac come without the `__MACOSX` folder and `.DS_Store` files. Zips from older Windows versions, which store names in the old DOS code page, come out with their accents intact.
+
+The dialogs follow your Windows display language. ZipClick speaks English, Portuguese (Portugal and Brazil), Spanish, French, German and Italian.
+
+## Limits
+
+It only handles .zip files, not .rar, .7z or .tar.gz.
+
+Password-protected zips, and zips compressed with Deflate64 (which Windows itself uses for very large files), can't be extracted. ZipClick says so and suggests Extract All, which handles both.
+
+You can still open a zip as a folder: right-click it, then Open with > File Explorer.
 
 ## Command line
 
@@ -41,31 +40,21 @@ Uninstall from *Settings → Apps → Installed apps*, or `zipclick uninstall`.
 zipclick FILE.zip...   extract
 zipclick install       install for this user
 zipclick uninstall     remove
-zipclick status        where .zip double-clicks go right now
---quiet                no dialogs; messages on stdout/stderr
+zipclick status        show where .zip double-clicks go right now
+--quiet                no dialogs, messages go to stdout and stderr
 ```
 
-## Limits
+Set `ZIPCLICK_LANG` (for example `pt-PT`) to force a language.
 
-- Zip only. Password-protected zips and Deflate64 (which Explorer uses for very
-  large files) aren't supported — ZipClick says so and points to *Open with →
-  Windows Explorer*, whose *Extract All…* handles both.
+## Building
 
-## Tested
-
-Windows 11 25H2 (x64): install from Downloads, Settings deep link, choosing the
-default, double-click in Explorer for every fixture shape (several items, one
-folder, one file, Mac-made, OEM code-page names, traversal/illegal names,
-encrypted), *Open with → Windows Explorer*, upgrade in place, uninstall and
-reinstall. 25H2 keeps the default in `UserChoiceLatest\ProgId`, which
-`status` and `install` read first.
-
-## Build
+You need Go. It cross-compiles from any OS.
 
 ```
 go test ./...
-./build.sh 0.1.0  # dist/zipclick-amd64.exe, dist/zipclick-arm64.exe
+./build.sh 0.3.1    # writes dist/zipclick-amd64.exe and dist/zipclick-arm64.exe
 ```
 
-The icon, manifest and version info live in `winres/` and are embedded through
-`rsrc_windows_*.syso`, which `build.sh` regenerates (go-winres).
+The icon, manifest and version info live in `winres/`. `build.sh` regenerates `rsrc_windows_*.syso` from them with go-winres, and `go build` embeds those.
+
+I test releases on Windows 11 25H2 (x64), clicking through the install, the Settings step, every kind of zip in the test suite, upgrade and uninstall.

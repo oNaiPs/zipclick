@@ -29,14 +29,28 @@ import (
 // that are encrypted, or compressed with something other than Deflate, are
 // decrypted and decompressed here from their raw bytes.
 type zipSource struct {
-	r        *zip.ReadCloser
+	r        *zip.Reader
+	f        *os.File
 	i        int
 	password string
 	oem      *charmap.Charmap
 }
 
-func openZip(path, password string, p *Progress) (source, error) {
-	r, err := zip.OpenReader(path)
+func openZip(path, password string, p *Progress) (src source, err error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if src == nil {
+			f.Close()
+		}
+	}()
+	fi, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	r, err := zip.NewReader(newBlockReaderAt(f), fi.Size())
 	if err != nil {
 		return nil, err
 	}
@@ -47,11 +61,10 @@ func openZip(path, password string, p *Progress) (source, error) {
 		encrypted = encrypted || f.Flags&0x1 != 0
 	}
 	if encrypted && password == "" {
-		r.Close()
 		return nil, ErrEncrypted
 	}
 	p.setTotal(total)
-	return &zipSource{r: r, password: password, oem: oemDecoder()}, nil
+	return &zipSource{r: r, f: f, password: password, oem: oemDecoder()}, nil
 }
 
 func (s *zipSource) next() (*member, error) {
@@ -73,7 +86,7 @@ func (s *zipSource) next() (*member, error) {
 }
 
 func (s *zipSource) countsInput() bool { return false }
-func (s *zipSource) Close() error      { return s.r.Close() }
+func (s *zipSource) Close() error      { return s.f.Close() }
 
 // The compression methods ZipClick reads: Store and Deflate, which archive/zip
 // does itself unless the member is encrypted, and the others zips in the wild

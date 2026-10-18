@@ -34,7 +34,7 @@ ZipClick reads .zip (including password-protected ones, ZipCrypto or AES, and th
 
 ## Limits
 
-.7z, .xz and .rar archives extract several times slower than 7-Zip, because their decoders are written in Go and use one core: 1 GB of files in a .7z takes about 17 seconds instead of 4. Zip, gzip and zstd are close to the native tools, and .zip is faster than Windows' own Extract All. The [benchmark page](https://onaips.github.io/zipclick/benchmark.html) has the numbers against 7-Zip, WinRAR, Bandizip and Windows, and `bench/` has the scripts.
+.7z, .xz and .rar archives extract several times slower than 7-Zip, because their decoders are written in Go and use one core: 1 GB of files in a .7z takes about 18 seconds instead of 3. Zip, gzip and zstd are close to the native tools, and .zip is faster than Windows' own Extract All. The [benchmark page](https://onaips.github.io/zipclick/benchmark.html) has the numbers against 7-Zip, WinRAR, Bandizip and Windows, and `bench/` has the scripts.
 
 Symbolic links inside an archive are skipped. Self-extracting .exe archives aren't handled.
 

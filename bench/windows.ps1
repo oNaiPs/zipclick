@@ -9,6 +9,8 @@ $sz = 'C:\Program Files\7-Zip\7z.exe'
 $wr = 'C:\Program Files\WinRAR\WinRAR.exe'
 $bz = 'C:\Program Files\Bandizip\bz.exe'
 $zc = "$B\ZipClick.exe"
+# Decimal points, not commas, whatever the Windows locale.
+[Threading.Thread]::CurrentThread.CurrentCulture = 'en-US'
 $archives = 'a.zip','aes.zip','a.7z','a.rar','a.tar.gz','a.tar.xz','a.tar.zst'
 "format,tool,run,seconds,files,bytes" | Set-Content $out
 

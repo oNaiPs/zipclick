@@ -76,7 +76,7 @@ page = f"""<!doctype html>
 
 <p>The same 337 MB of files, packed in seven archive formats, extracted by ZipClick and by the tools people already use on Windows. Shorter bars are faster.</p>
 
-<p>For .zip files, which is what most people get, ZipClick is faster than Windows' own Extract All and WinRAR, and slower than 7-Zip, Bandizip and tar.exe. For .tar.zst it is the fastest. For .rar and .tar.xz it is the slowest, and for .7z only WinRAR is slower: ZipClick decodes those formats with code written in Go on a single core, where 7-Zip and Bandizip use optimised C and assembly on several cores. For 1 GB of files in a .7z that means about 17 seconds instead of 4.</p>
+<p>ZipClick is faster than Windows' own Extract All for .zip files, which is what most people get, but the dedicated archivers are faster still: 7-Zip, WinRAR, Bandizip and Windows' tar.exe all beat it. For .rar and .tar.xz it is the slowest of the group, and for .7z only WinRAR is slower. The reason is mostly the decoders: ZipClick's are written in Go and work on one file and one core at a time, where the others use optimised C and assembly, often on several cores. For 1 GB of files in a .7z that means about 18 seconds instead of 3.</p>
 
 <h2>On Windows</h2>
 {chr(10).join(sections)}
@@ -90,11 +90,11 @@ page = f"""<!doctype html>
   <li>Windows Extract All was measured through the same Shell copy the menu item uses. WinRAR ran its background extraction, as from its context menu.</li>
   <li>7-Zip decodes .7z and .xz on several cores when the archive was written in blocks, as these were.</li>
   <li>Bandizip only unpacked the .tar from inside the .tar.xz and .tar.zst, so it is left out of those two.</li>
-  <li>Measured on 18 October 2026.</li>
+  <li>Measured twice on 18 October 2026, in two sessions. The second is shown: every program was faster in it, some by half, which is how much a virtual machine's disk cache and Defender's scanning can move these numbers. The order of the programs barely changed.</li>
 </ul>
 
 <h2>On a Mac</h2>
-<p>ZipClick is a Windows program, but its extraction code also runs on a Mac, which makes a cleaner comparison with each format's own command line tool: an Apple M3 Pro, the same archives, the same three runs.</p>
+<p>ZipClick is a Windows program, but its extraction code also runs on a Mac, which makes a cleaner comparison with each format's own command line tool: an Apple M3 Pro, the same archives, five runs each.</p>
 {chr(10).join(mac_sections)}
 
 <p>The scripts that make the archives and run the tests, and the raw numbers, are in the <a href="https://github.com/oNaiPs/zipclick/tree/main/bench">bench folder</a> of the source.</p>

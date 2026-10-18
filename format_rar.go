@@ -19,7 +19,7 @@ func openRar(path, password string, p *Progress) (source, error) {
 	// The dictionary is allocated at the size the header asks for, up to
 	// 4 GiB by default. RAR only goes past 1 GiB when told to (-md), so a
 	// larger one is refused rather than allocated.
-	opts := []rardecode.Option{rardecode.MaxDictionarySize(1 << 30)}
+	opts := []rardecode.Option{rardecode.MaxDictionarySize(1 << 30), rardecode.BufferSize(readAheadSize)}
 	// An empty Password option reads as a wrong password, not as none.
 	if password != "" {
 		opts = append(opts, rardecode.Password(password))

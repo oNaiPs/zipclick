@@ -34,7 +34,7 @@ func open7z(path, password string, p *Progress) (src source, err error) {
 	if err != nil {
 		return nil, err
 	}
-	r, err := sevenzip.NewReaderWithPassword(f, fi.Size(), password)
+	r, err := sevenzip.NewReaderWithPassword(newBlockReaderAt(f), fi.Size(), password)
 	if err != nil {
 		return nil, sevenZipError(err, password)
 	}

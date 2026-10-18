@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/klauspost/compress/zstd"
 	"github.com/ulikunitz/xz"
@@ -177,4 +178,44 @@ func (s *singleSource) Close() error      { return s.c.Close() }
 // zip that failed for another reason.
 func isFormatError(err error) bool {
 	return errors.Is(err, zip.ErrFormat)
+}
+
+// readAheadSize is how much of the archive one system call reads.
+const readAheadSize = 1 << 20
+
+// blockReaderAt serves ReadAt from one block of the file read in a single
+// system call. archive/zip and the 7z library read the archive 4 KB at a
+// time through io.SectionReader; each of those was a system call of its
+// own, and for a .7z that was most of the time spent extracting.
+type blockReaderAt struct {
+	mu  sync.Mutex
+	r   io.ReaderAt
+	buf []byte
+	off int64 // where buf[:n] came from
+	n   int
+}
+
+func newBlockReaderAt(r io.ReaderAt) *blockReaderAt {
+	return &blockReaderAt{r: r, buf: make([]byte, readAheadSize), off: -1}
+}
+
+func (b *blockReaderAt) ReadAt(p []byte, off int64) (int, error) {
+	if len(p) >= len(b.buf) {
+		return b.r.ReadAt(p, off)
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.off < 0 || off < b.off || off+int64(len(p)) > b.off+int64(b.n) {
+		n, err := b.r.ReadAt(b.buf, off)
+		if n == 0 && err != nil {
+			b.off, b.n = -1, 0
+			return 0, err
+		}
+		b.off, b.n = off, n
+	}
+	n := copy(p, b.buf[off-b.off:b.n])
+	if n < len(p) {
+		return n, io.EOF
+	}
+	return n, nil
 }

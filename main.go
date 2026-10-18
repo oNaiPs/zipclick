@@ -53,7 +53,15 @@ func main() {
 
 	failed := false
 	for _, a := range args {
-		dst, err := Extract(a)
+		var dst string
+		p := &Progress{}
+		err := withProgress(a, p, func() (err error) {
+			dst, err = Extract(a, p)
+			return err
+		})
+		if errors.Is(err, ErrCancelled) {
+			continue
+		}
 		if err != nil {
 			failed = true
 			report(a, err)
@@ -62,6 +70,8 @@ func main() {
 		notifyCreated(dst)
 		if quiet {
 			fmt.Println(dst)
+		} else {
+			reveal(dst)
 		}
 	}
 	if failed {

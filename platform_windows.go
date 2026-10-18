@@ -38,6 +38,9 @@ var (
 	shell32          = windows.NewLazySystemDLL("shell32.dll")
 	procGetOEMCP     = kernel32.NewProc("GetOEMCP")
 	procSHChangeNoti = shell32.NewProc("SHChangeNotify")
+	procILCreate     = shell32.NewProc("ILCreateFromPathW")
+	procILFree       = shell32.NewProc("ILFree")
+	procSHOpenSelect = shell32.NewProc("SHOpenFolderAndSelectItems")
 )
 
 const (
@@ -84,6 +87,26 @@ func notifyCreated(p string) {
 		event = shcneMkdir
 	}
 	procSHChangeNoti.Call(event, shcnfPathW|shcnfFlush, uintptr(unsafe.Pointer(u)), 0)
+}
+
+// reveal selects the extracted item in the Explorer window showing its
+// folder, as Finder does — reusing that window rather than opening another.
+// Not for the desktop: there is no folder window to select in, and asking
+// would open one.
+func reveal(p string) {
+	if desk, err := windows.KnownFolderPath(windows.FOLDERID_Desktop, 0); err == nil && samePath(filepath.Dir(p), desk) {
+		return
+	}
+	// S_FALSE (already initialised) still needs its CoUninitialize.
+	if err := windows.CoInitializeEx(0, windows.COINIT_APARTMENTTHREADED); err == nil || err == syscall.Errno(windows.S_FALSE) {
+		defer windows.CoUninitialize()
+	}
+	pidl, _, _ := procILCreate.Call(uintptr(unsafe.Pointer(utf16(p))))
+	if pidl == 0 {
+		return
+	}
+	defer procILFree.Call(pidl)
+	procSHOpenSelect.Call(pidl, 0, 0, 0)
 }
 
 func messageBox(title, msg string, yesNo bool) bool {

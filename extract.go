@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
@@ -23,6 +24,34 @@ var ErrEncrypted = errors.New("the archive is password-protected")
 
 // ErrEmpty is returned for an archive with nothing to extract.
 var ErrEmpty = errors.New("the archive is empty")
+
+// ErrCancelled is returned when Progress.Cancel stopped an extraction.
+var ErrCancelled = errors.New("cancelled")
+
+// Progress is shared between an extraction and whoever watches it: the
+// extraction fills in Total and advances Done, the watcher may Cancel. All
+// methods are safe from any goroutine, and a nil *Progress does nothing.
+type Progress struct {
+	total, done atomic.Int64
+	cancelled   atomic.Bool
+}
+
+// Bytes returns how many uncompressed bytes are written so far, of how many.
+func (p *Progress) Bytes() (done, total int64) {
+	return p.done.Load(), p.total.Load()
+}
+
+// Cancel asks the extraction to stop; it then returns ErrCancelled and leaves
+// nothing behind.
+func (p *Progress) Cancel() { p.cancelled.Store(true) }
+
+func (p *Progress) stopped() bool { return p != nil && p.cancelled.Load() }
+
+func (p *Progress) add(n int64) {
+	if p != nil {
+		p.done.Add(n)
+	}
+}
 
 // entry is one archive member, already mapped to a safe relative path.
 type entry struct {
@@ -40,8 +69,8 @@ type entry struct {
 // first and renamed into place at the end, so a failed or interrupted
 // extraction never leaves a half-written result under the final name.
 //
-// It returns the path of the item created.
-func Extract(archive string) (string, error) {
+// It returns the path of the item created. p may be nil.
+func Extract(archive string, p *Progress) (string, error) {
 	r, err := zip.OpenReader(archive)
 	if err != nil {
 		return "", fmt.Errorf("cannot read %s: %w", filepath.Base(archive), err)
@@ -61,7 +90,16 @@ func Extract(archive string) (string, error) {
 	hide(stage)
 	defer os.RemoveAll(stage) // no-op once renamed away
 
-	if err := writeAll(stage, entries); err != nil {
+	if p != nil {
+		var total int64
+		for _, e := range entries {
+			if !e.dir {
+				total += int64(e.file.UncompressedSize64)
+			}
+		}
+		p.total.Store(total)
+	}
+	if err := writeAll(stage, entries, p); err != nil {
 		return "", err
 	}
 
@@ -225,9 +263,12 @@ func uniquePath(dir, name string) string {
 	}
 }
 
-func writeAll(root string, entries []entry) error {
+func writeAll(root string, entries []entry, p *Progress) error {
 	dirTimes := map[string]time.Time{}
 	for _, e := range entries {
+		if p.stopped() {
+			return ErrCancelled
+		}
 		dst := filepath.Join(root, filepath.FromSlash(e.rel))
 		if e.dir {
 			if err := os.MkdirAll(dst, 0o755); err != nil {
@@ -239,7 +280,10 @@ func writeAll(root string, entries []entry) error {
 		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 			return err
 		}
-		if err := writeFile(dst, e.file); err != nil {
+		if err := writeFile(dst, e.file, p); err != nil {
+			if errors.Is(err, ErrCancelled) {
+				return err
+			}
 			return fmt.Errorf("%s: %w", e.rel, err)
 		}
 	}
@@ -257,7 +301,7 @@ func writeAll(root string, entries []entry) error {
 	return nil
 }
 
-func writeFile(dst string, f *zip.File) error {
+func writeFile(dst string, f *zip.File, p *Progress) error {
 	rc, err := f.Open()
 	if err != nil {
 		if errors.Is(err, zip.ErrAlgorithm) {
@@ -275,7 +319,7 @@ func writeFile(dst string, f *zip.File) error {
 	if err != nil {
 		return err
 	}
-	if _, err := io.Copy(out, rc); err != nil {
+	if _, err := io.CopyBuffer(&progressWriter{out, p}, rc, make([]byte, 256<<10)); err != nil {
 		out.Close()
 		return err
 	}
@@ -335,4 +379,20 @@ func oemDecoder() *charmap.Charmap {
 		return cm
 	}
 	return charmap.CodePage437
+}
+
+// progressWriter counts what passes through it and fails once cancelled, which
+// stops io.Copy within one buffer of the request.
+type progressWriter struct {
+	w io.Writer
+	p *Progress
+}
+
+func (pw *progressWriter) Write(b []byte) (int, error) {
+	if pw.p.stopped() {
+		return 0, ErrCancelled
+	}
+	n, err := pw.w.Write(b)
+	pw.p.add(int64(n))
+	return n, err
 }

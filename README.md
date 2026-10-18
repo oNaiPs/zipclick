@@ -6,6 +6,9 @@ does it on macOS — instead of being opened as a folder.
 - **One item inside** (a folder or a file) → that item appears next to the zip.
 - **Several items** → a folder named after the zip, next to it.
 - **Never overwrites**: `name 2`, `name 3`… if the name is taken.
+- The result is **selected** in the Explorer window you double-clicked in.
+- Anything that takes more than a moment gets a **progress window** with the
+  size, time left and Cancel — which leaves nothing behind.
 - `__MACOSX/` and `.DS_Store` from Mac-made zips are dropped; names are decoded
   from the OEM code page when the zip didn't use UTF-8, and macOS's decomposed
   accents are normalised.
@@ -43,7 +46,6 @@ zipclick status        where .zip double-clicks go right now
 - Zip only. Password-protected zips and Deflate64 (which Explorer uses for very
   large files) aren't supported — ZipClick says so and points to *Open with →
   Windows Explorer*, whose *Extract All…* handles both.
-- No progress window yet: a very large archive just takes a while to appear.
 
 ## Tested
 

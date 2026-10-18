@@ -80,7 +80,7 @@ func eq(t *testing.T, got, want []string) {
 func TestSeveralTopLevelItemsGoInAFolderNamedAfterTheArchive(t *testing.T) {
 	d := t.TempDir()
 	z := makeZip(t, d, "photos.zip", member{name: "a.jpg", body: "A"}, member{name: "b/c.jpg", body: "C"})
-	dst, err := Extract(z)
+	dst, err := Extract(z, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +93,7 @@ func TestSeveralTopLevelItemsGoInAFolderNamedAfterTheArchive(t *testing.T) {
 func TestASingleTopLevelFolderLandsBesideTheArchive(t *testing.T) {
 	d := t.TempDir()
 	z := makeZip(t, d, "download.zip", member{name: "project/"}, member{name: "project/x.txt", body: "x"})
-	if _, err := Extract(z); err != nil {
+	if _, err := Extract(z, nil); err != nil {
 		t.Fatal(err)
 	}
 	eq(t, tree(t, d), []string{"download.zip", "project/", "project/x.txt"})
@@ -102,7 +102,7 @@ func TestASingleTopLevelFolderLandsBesideTheArchive(t *testing.T) {
 func TestASingleFileLandsBesideTheArchive(t *testing.T) {
 	d := t.TempDir()
 	z := makeZip(t, d, "report.zip", member{name: "report.pdf", body: "%PDF"})
-	if _, err := Extract(z); err != nil {
+	if _, err := Extract(z, nil); err != nil {
 		t.Fatal(err)
 	}
 	eq(t, tree(t, d), []string{"report.pdf", "report.zip"})
@@ -117,7 +117,7 @@ func TestExistingNamesAreNeverOverwritten(t *testing.T) {
 	z := makeZip(t, d, "report.zip", member{name: "report.pdf", body: "new"})
 	os.WriteFile(filepath.Join(d, "report.pdf"), []byte("old"), 0o644)
 	for range 2 {
-		if _, err := Extract(z); err != nil {
+		if _, err := Extract(z, nil); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -138,7 +138,7 @@ func TestTraversalCannotEscapeAndDriveLettersAreDropped(t *testing.T) {
 		member{name: "/abs.txt", body: "x"},
 		member{name: `C:\win.txt`, body: "x"},
 	)
-	if _, err := Extract(z); err != nil {
+	if _, err := Extract(z, nil); err != nil {
 		t.Fatal(err)
 	}
 	eq(t, tree(t, d), []string{"sub/", "sub/evil.zip", "sub/evil/", "sub/evil/abs.txt", "sub/evil/win.txt"})
@@ -152,7 +152,7 @@ func TestMacMetadataIsDropped(t *testing.T) {
 		member{name: "Folder/.DS_Store", body: "x"},
 		member{name: "__MACOSX/Folder/._file.txt", body: "x"},
 	)
-	if _, err := Extract(z); err != nil {
+	if _, err := Extract(z, nil); err != nil {
 		t.Fatal(err)
 	}
 	// __MACOSX would otherwise make it two top-level items, and a needless folder.
@@ -166,7 +166,7 @@ func TestNamesAreDecodedAndNormalised(t *testing.T) {
 		member{name: oem, body: "x", rawName: true},
 		member{name: "Cafe\u0301.txt", body: "x"}, // macOS writes NFD
 	)
-	if _, err := Extract(z); err != nil {
+	if _, err := Extract(z, nil); err != nil {
 		t.Fatal(err)
 	}
 	eq(t, tree(t, d), []string{"names.zip", "names/", "names/Café.txt", "names/Façade é.txt"})
@@ -190,7 +190,7 @@ func TestWindowsIllegalNamesAreMadeLegal(t *testing.T) {
 func TestModificationTimesAreKept(t *testing.T) {
 	d := t.TempDir()
 	z := makeZip(t, d, "t.zip", member{name: "f.txt", body: "x"})
-	if _, err := Extract(z); err != nil {
+	if _, err := Extract(z, nil); err != nil {
 		t.Fatal(err)
 	}
 	fi, _ := os.Stat(filepath.Join(d, "f.txt"))
@@ -210,7 +210,7 @@ func TestDOSOnlyTimesAreLocalTime(t *testing.T) {
 	fw.Write([]byte("x"))
 	w.Close()
 	f.Close()
-	if _, err := Extract(p); err != nil {
+	if _, err := Extract(p, nil); err != nil {
 		t.Fatal(err)
 	}
 	fi, _ := os.Stat(filepath.Join(d, "f.txt"))
@@ -222,17 +222,58 @@ func TestDOSOnlyTimesAreLocalTime(t *testing.T) {
 func TestFailuresLeaveNothingBehind(t *testing.T) {
 	d := t.TempDir()
 	enc := makeZip(t, d, "secret.zip", member{name: "s.txt", body: "x", flags: 0x1})
-	if _, err := Extract(enc); !errors.Is(err, ErrEncrypted) {
+	if _, err := Extract(enc, nil); !errors.Is(err, ErrEncrypted) {
 		t.Fatalf("err = %v, want ErrEncrypted", err)
 	}
 	empty := makeZip(t, d, "empty.zip", member{name: "__MACOSX/._x", body: "x"})
-	if _, err := Extract(empty); !errors.Is(err, ErrEmpty) {
+	if _, err := Extract(empty, nil); !errors.Is(err, ErrEmpty) {
 		t.Fatalf("err = %v, want ErrEmpty", err)
 	}
 	notzip := filepath.Join(d, "notzip.zip")
 	os.WriteFile(notzip, []byte("hello"), 0o644)
-	if _, err := Extract(notzip); err == nil {
+	if _, err := Extract(notzip, nil); err == nil {
 		t.Fatal("expected an error for a non-zip")
 	}
 	eq(t, tree(t, d), []string{"empty.zip", "notzip.zip", "secret.zip"})
+}
+
+func TestProgressCountsEveryByte(t *testing.T) {
+	d := t.TempDir()
+	z := makeZip(t, d, "p.zip", member{name: "a.txt", body: strings.Repeat("a", 1000)}, member{name: "b/"}, member{name: "b/c.txt", body: "ccc"})
+	p := &Progress{}
+	if _, err := Extract(z, p); err != nil {
+		t.Fatal(err)
+	}
+	if done, total := p.Bytes(); done != 1003 || total != 1003 {
+		t.Fatalf("progress %d/%d, want 1003/1003", done, total)
+	}
+}
+
+func TestCancelLeavesNothingBehind(t *testing.T) {
+	d := t.TempDir()
+	z := makeZip(t, d, "big.zip", member{name: "a.bin", body: strings.Repeat("x", 4<<20)}, member{name: "b.bin", body: "y"})
+	p := &Progress{}
+	p.Cancel()
+	if _, err := Extract(z, p); !errors.Is(err, ErrCancelled) {
+		t.Fatalf("err = %v, want ErrCancelled", err)
+	}
+	eq(t, tree(t, d), []string{"big.zip"})
+}
+
+func TestDetailText(t *testing.T) {
+	for _, c := range []struct {
+		done, total int64
+		elapsed     time.Duration
+		want        string
+	}{
+		{0, 500, time.Second, "0 bytes of 500 bytes"},
+		{1 << 20, 40 << 20, time.Second, "1.0 MB of 40.0 MB"},
+		{10 << 20, 40 << 20, 10 * time.Second, "10.0 MB of 40.0 MB — about 30 seconds left"},
+		{39 << 20, 40 << 20, 10 * time.Second, "39.0 MB of 40.0 MB — a few seconds left"},
+		{1 << 30, 10 << 30, 30 * time.Second, "1.0 GB of 10.0 GB — about 5 minutes left"},
+	} {
+		if got := detailText(c.done, c.total, c.elapsed); got != c.want {
+			t.Errorf("detailText(%d, %d, %v) = %q, want %q", c.done, c.total, c.elapsed, got, c.want)
+		}
+	}
 }

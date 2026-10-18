@@ -1,0 +1,76 @@
+name: Release
+
+# Pushing a tag v* builds both executables from that commit, has SignPath
+# sign them, and drafts a GitHub release with the result. Nothing is
+# published until the signing request is approved in SignPath and the draft
+# is published by hand.
+#
+# Signing runs once the repository variable SIGNPATH_ORGANIZATION_ID and the
+# secret SIGNPATH_API_TOKEN exist; before that the draft gets unsigned files.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Test
+        run: |
+          go vet ./...
+          GOOS=windows go vet ./...
+          go test ./...
+
+      - name: Build
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then ./build.sh "$GITHUB_REF_NAME"; else ./build.sh; fi
+          mkdir out
+          cp dist/zipclick-amd64.exe out/ZipClick.exe
+          cp dist/zipclick-arm64.exe out/ZipClick-arm64.exe
+
+      - name: Upload for signing
+        id: unsigned
+        uses: actions/upload-artifact@v4
+        with:
+          name: zipclick-unsigned
+          path: out/
+
+      - name: Sign
+        if: vars.SIGNPATH_ORGANIZATION_ID != ''
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: zipclick
+          signing-policy-slug: release-signing
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: out
+
+      - name: Draft the release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v=${GITHUB_REF_NAME#v}
+          cp out/ZipClick.exe "out/zipclick-$v-x64.exe"
+          cp out/ZipClick-arm64.exe "out/zipclick-$v-arm64.exe"
+          # checkout can leave the tag lightweight; the notes are its message.
+          git fetch --force --tags
+          git tag -l --format='%(contents)' "$GITHUB_REF_NAME" > notes.md
+          printf '\nCode signing policy: https://onaips.github.io/zipclick/code-signing.html\n' >> notes.md
+          gh release create "$GITHUB_REF_NAME" --draft --title "ZipClick $v" --notes-file notes.md out/*.exe

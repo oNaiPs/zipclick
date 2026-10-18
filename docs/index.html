@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ZipClick: double-click a zip or rar on Windows to extract it</title>
-<meta name="description" content="A small free program that makes double-clicking a .zip, .rar, .7z or .tar.gz file on Windows extract it next to itself, the way it works on a Mac.">
+<title>ZipClick: extract zip files on Windows with a double-click</title>
+<meta name="description" content="A free Windows program. Double-click a zip, rar or 7z file and the files come out in the same folder, like on a Mac.">
 <link rel="icon" href="img/favicon-32.png">
 <style>
   :root {
@@ -77,46 +77,43 @@
 
 <p class="lede">Double-click a zip file on Windows and get the files, like on a Mac.</p>
 
-<p>The files appear next to the zip. It works the same for .rar, .7z and .tar.gz files, and asks for the password when there is one.</p>
+<p>It also opens .rar, .7z and .tar.gz files, and asks for the password if there is one.</p>
 
 <div class="download">
   <a class="button" href="https://github.com/oNaiPs/zipclick/releases/latest/download/ZipClick.exe">Download ZipClick for Windows 10 and 11</a>
 </div>
 <p class="small">Version 0.4.0, 7.3 MB, free. On a Snapdragon (ARM) laptop, get the <a href="https://github.com/oNaiPs/zipclick/releases/latest/download/ZipClick-arm64.exe">ARM64 version</a>.</p>
 
-<video src="demo.mp4" poster="img/demo-poster.png" autoplay muted loop playsinline aria-label="Double-clicking three zip files in Explorer. Each one is extracted next to itself and selected. The large one shows a progress window first."></video>
+<video src="demo.mp4" poster="img/demo-poster.png" autoplay muted loop playsinline aria-label="Double-clicking zip files in File Explorer."></video>
 
 <h2>How to install</h2>
 <ol>
   <li>Download ZipClick.exe and open it.</li>
   <li>Windows will probably show a blue "Windows protected your PC" box. That's because I haven't paid for a code-signing certificate yet, not because something is wrong. Click More info, then Run anyway.</li>
-  <li>ZipClick asks if you want zip files to work this way. Click Yes.</li>
-  <li>Windows Settings opens on ZipClick's page. Click the box under .zip, choose ZipClick, then Set default. Windows makes you do this step yourself, because programs aren't allowed to.
-    <img class="shot" src="img/default-app.png" width="446" height="258" alt="The Windows Settings dialog 'Select a default app for .zip files', with ZipClick selected.">
+  <li>Click Yes when ZipClick asks.</li>
+  <li>Windows Settings opens. Under .zip, choose ZipClick and click Set default. Windows doesn't let programs do this part for you.
+    <img class="shot" src="img/default-app.png" width="446" height="258" alt="Windows Settings, choosing ZipClick as the default app for .zip files.">
   </li>
 </ol>
-<p>For .rar and .7z, do the same on that page, or wait until you open one and Windows asks: pick ZipClick, then Always. You don't need admin rights or a restart.</p>
+<p>For .rar and .7z files, do the same on that page. Or skip it: the first time you open one, Windows asks which app to use. Pick ZipClick, then Always.</p>
 
 <h2>Questions</h2>
 <dl>
   <dt>Where do the files go?</dt>
-  <dd>Next to the zip. If there are several loose files, they go into a new folder named after the zip. Nothing is ever replaced: if "Photos" already exists, you get "Photos 2".</dd>
+  <dd>In the same folder as the zip. If there are many files, they go into a new folder with the zip's name. Nothing gets overwritten.</dd>
 
   <dt>Can I still look inside a zip without extracting it?</dt>
   <dd>Yes. Right-click it, choose Open with, then File Explorer.</dd>
 
-  <dt>Is it slower than 7-Zip?</dt>
-  <dd>For very large .7z and .rar files, yes. A 1 GB .7z takes about 20 seconds instead of 6.</dd>
-
-  <dt>Does it connect to the internet?</dt>
-  <dd>No. It has no network code, and it only writes in the folder where your archive is.</dd>
+  <dt>Does it go online?</dt>
+  <dd>No, never.</dd>
 
   <dt>How do I remove it?</dt>
-  <dd>Settings &gt; Apps &gt; Installed apps, find ZipClick, then Uninstall.</dd>
+  <dd>Go to Settings &gt; Apps &gt; Installed apps and uninstall ZipClick.</dd>
 </dl>
 
 <footer>
-  ZipClick is made by Jose Pereira. The <a href="https://github.com/oNaiPs/zipclick">source is on GitHub</a>, along with the <a href="https://github.com/oNaiPs/zipclick/releases">list of changes</a>. Found a zip it gets wrong? <a href="https://github.com/oNaiPs/zipclick/issues">Open an issue</a>.
+  ZipClick is made by Jose Pereira. The <a href="https://github.com/oNaiPs/zipclick">source code</a> and <a href="https://github.com/oNaiPs/zipclick/releases">list of changes</a> are on GitHub. If a file doesn't extract properly, <a href="https://github.com/oNaiPs/zipclick/issues">open an issue</a>. <a href="code-signing.html">Code signing policy</a>.
 </footer>
 
 </main>

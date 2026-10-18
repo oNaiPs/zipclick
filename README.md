@@ -53,6 +53,16 @@ zipclick status        show where double-clicks on each type go right now
 
 Set `ZIPCLICK_LANG` (for example `pt-PT`) to force a language.
 
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).
+
+Committers and reviewers: [Jose Pereira](https://github.com/oNaiPs). Approvers: [Jose Pereira](https://github.com/oNaiPs).
+
+Releases are built by GitHub Actions from the tagged source and signed only after I approve each one in SignPath.
+
+Privacy policy: this program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it. ZipClick has no network code at all.
+
 ## Building
 
 You need Go. It cross-compiles from any OS.
@@ -62,8 +72,14 @@ go test ./...
 ./build.sh 0.4.0    # writes dist/zipclick-amd64.exe and dist/zipclick-arm64.exe
 ```
 
+A release is a tag: `git tag -a v0.5.0 -m "what changed"` and `git push origin v0.5.0`. The workflow in `.github/workflows/release.yml` tests, builds, sends both executables to SignPath and drafts the GitHub release with the signed files and the tag message as notes. Approve the signing request in SignPath, check the draft, publish it.
+
 The archives the tests use are in `testdata/`, made by `testdata/make.sh`. The icon, manifest and version info live in `winres/`. `build.sh` regenerates `rsrc_windows_*.syso` from them with go-winres, and `go build` embeds those.
 
 I test releases on Windows 11 25H2 (x64), clicking through the install, the Settings step, every archive in the test suite, upgrade and uninstall.
 
 The formats come from [bodgit/sevenzip](https://github.com/bodgit/sevenzip), [nwaples/rardecode](https://github.com/nwaples/rardecode), [klauspost/compress](https://github.com/klauspost/compress) and [ulikunitz/xz](https://github.com/ulikunitz/xz). The Deflate64 decoder is Go's own inflate with Deflate64's three changes, in `internal/deflate64`.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

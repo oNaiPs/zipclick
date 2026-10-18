@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ZipClick: code signing policy</title>
+<meta name="description" content="How ZipClick releases are built and signed, who approves them, and what the program does with your data.">
+<link rel="icon" href="img/favicon-32.png">
+<style>
+  :root {
+    --bg: #fbfaf7;
+    --text: #1f1d1a;
+    --muted: #615b52;
+    --rule: #e4dfd5;
+    --accent: #f2c14e;
+    --accent-ink: #2b2205;
+    --link: #1f5fbf;
+    --shot-border: #d8d2c6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1b1a18;
+      --text: #ece8e1;
+      --muted: #a8a196;
+      --rule: #34312c;
+      --link: #8ab4f8;
+      --shot-border: #3b3833;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 17px/1.6 "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  }
+  main { max-width: 680px; margin: 0 auto; padding: 48px 20px 64px; }
+  a { color: var(--link); }
+  h1 { font-size: 1rem; margin: 0 0 28px; display: flex; align-items: center; gap: 10px; font-weight: 600; }
+  h1 img { width: 32px; height: 32px; }
+  .lede { font-size: 1.9rem; line-height: 1.25; font-weight: 600; margin: 0 0 18px; letter-spacing: -0.01em; }
+  h2 { font-size: 1.15rem; margin: 48px 0 8px; padding-top: 24px; border-top: 1px solid var(--rule); }
+  p { margin: 0 0 14px; }
+  .download { margin: 26px 0 8px; }
+  .button {
+    display: inline-block;
+    background: var(--accent);
+    color: var(--accent-ink);
+    text-decoration: none;
+    font-weight: 600;
+    padding: 11px 18px;
+    border-radius: 6px;
+    border: 1px solid #d9a52c;
+  }
+  .button:hover { background: #f5cd6a; }
+  .small { color: var(--muted); font-size: 0.9rem; }
+  video, .shot {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    border: 1px solid var(--shot-border);
+    border-radius: 6px;
+  }
+  video { margin: 32px 0 8px; }
+  .shot { margin: 14px 0 18px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08); }
+  ol { padding-left: 1.3em; margin: 0 0 14px; }
+  li { margin-bottom: 10px; }
+  dt { font-weight: 600; margin-top: 18px; }
+  dd { margin: 4px 0 0; }
+  footer { margin-top: 56px; padding-top: 20px; border-top: 1px solid var(--rule); color: var(--muted); font-size: 0.9rem; }
+</style>
+</head>
+<body>
+<main>
+
+<h1><a href="./" style="display:flex;align-items:center;gap:10px;color:inherit;text-decoration:none"><img src="img/icon-64.png" alt="">ZipClick</a></h1>
+
+<p class="lede">Code signing policy</p>
+
+<p>Free code signing provided by <a href="https://about.signpath.io">SignPath.io</a>, certificate by <a href="https://signpath.org">SignPath Foundation</a>.</p>
+
+<p>Every release is built by GitHub Actions from the tagged source code in the <a href="https://github.com/oNaiPs/zipclick">public repository</a>, and is only signed after I approve that release in SignPath. Nothing built on anyone's own computer gets signed.</p>
+
+<h2>Team roles</h2>
+<p>Committers and reviewers: <a href="https://github.com/oNaiPs">Jose Pereira</a><br>
+Approvers: <a href="https://github.com/oNaiPs">Jose Pereira</a></p>
+
+<h2>Privacy policy</h2>
+<p>This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it.</p>
+<p>ZipClick has no network code at all. It reads the archive you open and writes the extracted files next to it.</p>
+
+<footer>
+  <a href="./">Back to ZipClick</a>. The <a href="https://github.com/oNaiPs/zipclick">source is on GitHub</a> under the MIT license.
+</footer>
+
+</main>
+</body>
+</html>

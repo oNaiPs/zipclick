@@ -64,7 +64,9 @@ func streamDecoder(head []byte) func(io.Reader) (io.ReadCloser, error) {
 		}
 	case bytes.HasPrefix(head, []byte{0x28, 0xb5, 0x2f, 0xfd}):
 		return func(r io.Reader) (io.ReadCloser, error) {
-			z, err := zstd.NewReader(r, zstd.WithDecoderLowmem(true))
+			// One decoder, in the caller's goroutine: no background
+			// goroutines whose panics nothing would catch.
+			z, err := zstd.NewReader(r, zstd.WithDecoderLowmem(true), zstd.WithDecoderConcurrency(1))
 			if err != nil {
 				return nil, err
 			}
@@ -205,6 +207,7 @@ func (b *blockReaderAt) ReadAt(p []byte, off int64) (int, error) {
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	var rerr error
 	if b.off < 0 || off < b.off || off+int64(len(p)) > b.off+int64(b.n) {
 		n, err := b.r.ReadAt(b.buf, off)
 		if n == 0 && err != nil {
@@ -212,9 +215,16 @@ func (b *blockReaderAt) ReadAt(p []byte, off int64) (int, error) {
 			return 0, err
 		}
 		b.off, b.n = off, n
+		if err != io.EOF {
+			rerr = err // a real read error, kept for a short read below
+		}
 	}
 	n := copy(p, b.buf[off-b.off:b.n])
 	if n < len(p) {
+		if rerr != nil {
+			b.off, b.n = -1, 0
+			return n, rerr
+		}
 		return n, io.EOF
 	}
 	return n, nil

@@ -52,8 +52,9 @@ func openZip(path, password string, p *Progress) (src source, err error) {
 		return nil, err
 	}
 	// The file itself, not a read-ahead cache: members are read by several
-	// goroutines at once (pread is fine with that), each through its own
-	// buffer, set up in openZipFile and by the decompressor below.
+	// goroutines at once, each through its own 1 MiB buffer (set up in
+	// openZipFile and by the decompressor below). On Windows the reads on
+	// one handle take turns; with buffers that large it costs little.
 	r, err := zip.NewReader(f, fi.Size())
 	if err != nil {
 		return nil, err
@@ -106,7 +107,7 @@ var zipMethods = map[uint16]func(r io.Reader, f *zip.File) (io.ReadCloser, error
 	12:          func(r io.Reader, _ *zip.File) (io.ReadCloser, error) { return io.NopCloser(bzip2.NewReader(r)), nil },
 	14:          openZipLZMA,
 	93: func(r io.Reader, _ *zip.File) (io.ReadCloser, error) {
-		z, err := zstd.NewReader(r, zstd.WithDecoderLowmem(true))
+		z, err := zstd.NewReader(r, zstd.WithDecoderLowmem(true), zstd.WithDecoderConcurrency(1), zstd.WithDecoderMaxWindow(64<<20))
 		if err != nil {
 			return nil, err
 		}
@@ -215,6 +216,14 @@ func openZipLZMA(r io.Reader, f *zip.File) (io.ReadCloser, error) {
 	}
 	var lz [13]byte
 	copy(lz[:5], hdr[4:9])
+	// A member of n bytes never refers back further than n, so the
+	// dictionary it asks for is cut to its own size: a 3 MiB file need not
+	// allocate the 64 MiB (or 256 MiB, from a crafted header) its header
+	// names. Up to eight are decoded at once.
+	dict := binary.LittleEndian.Uint32(lz[1:5])
+	if need := max(f.UncompressedSize64, 4096); uint64(dict) > need {
+		binary.LittleEndian.PutUint32(lz[1:5], uint32(need))
+	}
 	size := f.UncompressedSize64
 	if f.Flags&0x2 != 0 { // the stream ends with a marker
 		size = ^uint64(0)

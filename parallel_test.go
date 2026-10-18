@@ -154,3 +154,84 @@ func TestOverlappedCopyKeepsErrors(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+type panicReader struct{}
+
+func (panicReader) Read([]byte) (int, error) { panic("decoder bug") }
+
+func TestADecoderPanicInTheCopyGoroutineIsAnError(t *testing.T) {
+	dir := t.TempDir()
+	m := &member{name: "x", size: 2 * copyChunk, open: func() (io.ReadCloser, error) {
+		return io.NopCloser(panicReader{}), nil
+	}}
+	if err := writeFile(filepath.Join(dir, "x"), m, nil, nil); !errors.Is(err, errDamaged) {
+		t.Fatalf("err = %v, want errDamaged", err)
+	}
+}
+
+func TestADecoderPanicInAZipWorkerIsAnError(t *testing.T) {
+	const method = 200
+	zipMethods[method] = func(io.Reader, *zip.File) (io.ReadCloser, error) { return io.NopCloser(panicReader{}), nil }
+	defer delete(zipMethods, method)
+	dir := t.TempDir()
+	archive := filepath.Join(dir, "p.zip")
+	f, _ := os.Create(archive)
+	w := zip.NewWriter(f)
+	for i := range 4 {
+		fw, _ := w.CreateRaw(&zip.FileHeader{Name: fmt.Sprintf("f%d", i), Method: method, CompressedSize64: 1, UncompressedSize64: 1})
+		fw.Write([]byte{0})
+	}
+	w.Close()
+	f.Close()
+	if _, err := Extract(archive, "", nil); !errors.Is(err, errDamaged) {
+		t.Fatalf("err = %v, want errDamaged", err)
+	}
+	eq(t, tree(t, dir), []string{"p.zip"})
+}
+
+// σ and ς are different lower-case letters but the same file name on
+// Windows and macOS: never written by two workers at once.
+func TestNamesThatFoldTogetherAreNotWrittenConcurrently(t *testing.T) {
+	dir := t.TempDir()
+	a, b := strings.Repeat("A", 8<<20), strings.Repeat("b", 3<<20)
+	archive := zipOf(t, dir, "greek.zip", [][2]string{{"σ.txt", a}, {"other.txt", "x"}, {"ς.txt", b}})
+	dst, err := Extract(archive, "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ents, _ := os.ReadDir(dst)
+	for _, e := range ents {
+		got, _ := os.ReadFile(filepath.Join(dst, e.Name()))
+		if s := string(got); s != a && s != b && s != "x" {
+			t.Fatalf("%s holds a mix of two members (%d bytes)", e.Name(), len(got))
+		}
+	}
+}
+
+func TestFilesInFlightCountAgainstTheReserve(t *testing.T) {
+	defer func(f func(string) (uint64, bool)) { diskFree = f }(diskFree)
+	diskFree = func(string) (uint64, bool) { return diskReserve + 100<<20, true }
+	w := &writer{root: t.TempDir()}
+	w.inflight.Store(90 << 20) // other workers are writing 90 MiB
+	j := &job{m: &member{name: "x", size: 20 << 20}, rel: "x", dst: filepath.Join(w.root, "x")}
+	if err := w.write(j, nil); !errors.Is(err, ErrDiskFull) {
+		t.Fatalf("err = %v, want ErrDiskFull", err)
+	}
+	if got := w.inflight.Load(); got != 90<<20 {
+		t.Fatalf("inflight %d after the refusal, want it restored", got)
+	}
+}
+
+type failAt struct{ data []byte }
+
+func (f failAt) ReadAt(p []byte, off int64) (int, error) {
+	n := copy(p, f.data[off:])
+	return n, errors.New("bad sector")
+}
+
+func TestBlockReaderKeepsARealReadError(t *testing.T) {
+	b := newBlockReaderAt(failAt{make([]byte, 100)})
+	if _, err := b.ReadAt(make([]byte, 200), 0); err == nil || err.Error() != "bad sector" {
+		t.Fatalf("err = %v, want the read error, not EOF", err)
+	}
+}

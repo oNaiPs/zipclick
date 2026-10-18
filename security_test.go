@@ -3,6 +3,7 @@ package main
 import (
 	"archive/zip"
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -168,4 +169,44 @@ func pad512(b []byte) []byte {
 		b = append(b, 0)
 	}
 	return b
+}
+
+// A small LZMA member whose header asks for a big dictionary is given one
+// its own size: eight at once must not cost 8 x 256 MiB.
+func TestAnLZMADictionaryIsCutToTheMemberSize(t *testing.T) {
+	dir := t.TempDir()
+	archive := filepath.Join(dir, "small.zip")
+	f, _ := os.Create(archive)
+	w := zip.NewWriter(f)
+	// The real member: 7z's LZMA of 5000 lines, asking for a 16 MiB
+	// dictionary, from the fixture.
+	src, err := zip.OpenReader("testdata/album-lzma.zip")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer src.Close()
+	for _, zf := range src.File {
+		if zf.Method != 14 {
+			continue
+		}
+		raw, _ := zf.OpenRaw()
+		body, _ := io.ReadAll(raw)
+		h := zf.FileHeader
+		// Ask for the 256 MiB cap instead.
+		binary.LittleEndian.PutUint32(body[5:9], maxLZMADict)
+		fw, _ := w.CreateRaw(&h)
+		fw.Write(body)
+	}
+	w.Close()
+	f.Close()
+	var before, after runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
+	if _, err := Extract(archive, "", nil); err != nil {
+		t.Fatal(err)
+	}
+	runtime.ReadMemStats(&after)
+	if grew := (after.TotalAlloc - before.TotalAlloc) >> 20; grew > 64 {
+		t.Errorf("allocated %d MiB for a member of %d KiB", grew, 5000*20/1024)
+	}
 }

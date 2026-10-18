@@ -15,6 +15,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"golang.org/x/text/cases"
 	"golang.org/x/text/encoding/charmap"
 	"golang.org/x/text/unicode/norm"
 )
@@ -383,6 +384,7 @@ type writer struct {
 	seen     map[string]bool
 	dirTimes map[string]time.Time
 	jobs     []*job
+	inflight atomic.Int64 // declared bytes of the files being written
 }
 
 // job is one file to write.
@@ -424,9 +426,24 @@ func (w *writer) place(m *member) (*job, error) {
 	return &job{m: m, rel: rel, dst: dst}, nil
 }
 
+// safeWrite is write for a worker goroutine: a decoder panic there is out
+// of reach of Extract's recover, so it is turned into an error here.
+func (w *writer) safeWrite(j *job, stopped func() bool) (err error) {
+	defer func() {
+		if v := recover(); v != nil {
+			err = fmt.Errorf("%w: %v", errDamaged, v)
+		}
+	}()
+	return w.write(j, stopped)
+}
+
 func (w *writer) write(j *job, stopped func() bool) error {
 	if j.m.size > 0 {
-		if err := roomFor(w.root, j.m.size); err != nil {
+		// Files being written at the same time all count against the
+		// reserve, not just this one.
+		reserved := w.inflight.Add(j.m.size)
+		defer w.inflight.Add(-j.m.size)
+		if err := roomFor(w.root, reserved); err != nil {
 			return err
 		}
 	}
@@ -447,8 +464,11 @@ func (w *writer) writeJobs() error {
 		return nil
 	}
 	names := map[string]bool{}
+	fold := cases.Fold()
 	for _, j := range w.jobs {
-		k := strings.ToLower(j.dst)
+		// Full case folding, as NTFS and APFS compare names: σ and ς are
+		// the same file there, though their lower cases differ.
+		k := fold.String(j.dst)
 		if names[k] {
 			for _, j := range w.jobs {
 				if err := w.write(j, w.p.stopped); err != nil {
@@ -476,7 +496,7 @@ func (w *writer) writeJobs() error {
 				if stopped() {
 					continue
 				}
-				if err := w.write(j, stopped); err != nil {
+				if err := w.safeWrite(j, stopped); err != nil {
 					mu.Lock()
 					if firstErr == nil && !(failed.Load() && errors.Is(err, ErrCancelled)) {
 						firstErr = err
@@ -601,6 +621,13 @@ func copyOverlapped(w io.Writer, r io.Reader) (int64, error) {
 	var rerr error
 	go func() {
 		defer close(full)
+		// A decoder panicking here is out of reach of Extract's recover,
+		// and would take the process (and the staging folder) with it.
+		defer func() {
+			if v := recover(); v != nil {
+				rerr = fmt.Errorf("%w: %v", errDamaged, v)
+			}
+		}()
 		for {
 			var b []byte
 			select {

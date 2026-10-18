@@ -81,12 +81,6 @@ func (p *Progress) setTotal(n int64) {
 	}
 }
 
-func (p *Progress) setDone(n int64) {
-	if p != nil {
-		p.done.Store(n)
-	}
-}
-
 func (p *Progress) add(n int64) {
 	if p != nil {
 		p.done.Add(n)
@@ -149,7 +143,7 @@ func Extract(archive, password string, p *Progress) (dst string, err error) {
 	hide(stage)
 	defer removeStage(stage) // no-op once renamed away
 
-	tops, err := extractInto(archive, stage, src, p)
+	tops, err := writeAll(stage, src, p)
 	if err != nil {
 		return "", err
 	}
@@ -164,27 +158,6 @@ func Extract(archive, password string, p *Progress) (dst string, err error) {
 		unhide(dst)
 	}
 	return dst, err
-}
-
-// extractInto extracts src into stage, through tar.exe when the backend and
-// the archive allow it, else (or if tar.exe fails) with ZipClick's engine.
-func extractInto(archive, stage string, src source, p *Progress) ([]string, error) {
-	if plan, ok := planFor(src); ok {
-		err := systemExtract(archive, stage, plan, p)
-		if err == nil {
-			systemExtracts.Add(1)
-			return tidyTree(stage)
-		}
-		if errors.Is(err, ErrCancelled) || errors.Is(err, ErrDiskFull) {
-			return nil, err
-		}
-		// Start again from nothing; src has not been read yet.
-		if err := emptyDir(stage); err != nil {
-			return nil, err
-		}
-		p.setDone(0)
-	}
-	return writeAll(stage, src, p)
 }
 
 // errDamaged wraps what a format library panicked with.

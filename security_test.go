@@ -40,15 +40,27 @@ func TestCrafted7zIsDamagedNotACrash(t *testing.T) {
 // A 3 KB sparse tar that expands to as much as it says (256 MiB here; it
 // could say a terabyte). The free-space guard has to stop it.
 func TestDecompressionBombStopsBeforeTheDiskFills(t *testing.T) {
-	b := sparseBomb(256 << 20)
+	const realsize = 256 << 20
+	var recs bytes.Buffer
+	for _, kv := range [][2]string{{"GNU.sparse.major", "1"}, {"GNU.sparse.minor", "0"}, {"GNU.sparse.name", "big.bin"}, {"GNU.sparse.realsize", fmt.Sprint(realsize)}} {
+		s := fmt.Sprintf(" %s=%s\n", kv[0], kv[1])
+		n := len(s) + 1
+		for len(fmt.Sprint(n))+len(s) != n {
+			n++
+		}
+		fmt.Fprintf(&recs, "%d%s", n, s)
+	}
+	var b []byte
+	b = append(b, ustarHeader("./PaxHeaders/big.bin", 'x', int64(recs.Len()))...)
+	b = append(b, pad512(recs.Bytes())...)
+	b = append(b, ustarHeader("./GNUSparseFile.0/big.bin", '0', 512)...)
+	b = append(b, pad512([]byte("0\n"))...)
+	b = append(b, make([]byte, 1024)...)
 
 	dir := t.TempDir()
 	archive := filepath.Join(dir, "bomb.tar")
 	os.WriteFile(archive, b, 0o644)
 
-	// The engine's guard; tar.exe's has a test of its own on Windows.
-	defer func(m backendMode) { backend = m }(backend)
-	backend = backendBuiltin
 	// Pretend the drive has room for the reserve and 100 MiB more.
 	defer func(f func(string) (uint64, bool)) { diskFree = f }(diskFree)
 	diskFree = func(string) (uint64, bool) { return diskReserve + 100<<20, true }
@@ -130,25 +142,6 @@ func TestTheFinalRenameNeverReplaces(t *testing.T) {
 	if b, _ := os.ReadFile(filepath.Join(dir, "taken.txt")); string(b) != "old" {
 		t.Fatal("the existing file was replaced")
 	}
-}
-
-// sparseBomb is a PAX sparse tar of a few KB that unpacks to realsize bytes.
-func sparseBomb(realsize int64) []byte {
-	var recs bytes.Buffer
-	for _, kv := range [][2]string{{"GNU.sparse.major", "1"}, {"GNU.sparse.minor", "0"}, {"GNU.sparse.name", "big.bin"}, {"GNU.sparse.realsize", fmt.Sprint(realsize)}} {
-		s := fmt.Sprintf(" %s=%s\n", kv[0], kv[1])
-		n := len(s) + 1
-		for len(fmt.Sprint(n))+len(s) != n {
-			n++
-		}
-		fmt.Fprintf(&recs, "%d%s", n, s)
-	}
-	var b []byte
-	b = append(b, ustarHeader("./PaxHeaders/big.bin", 'x', int64(recs.Len()))...)
-	b = append(b, pad512(recs.Bytes())...)
-	b = append(b, ustarHeader("./GNUSparseFile.0/big.bin", '0', 512)...)
-	b = append(b, pad512([]byte("0\n"))...)
-	return append(b, make([]byte, 1024)...)
 }
 
 func ustarHeader(name string, typ byte, size int64) []byte {

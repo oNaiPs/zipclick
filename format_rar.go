@@ -11,8 +11,6 @@ import (
 // stream, which is the only way through a solid one.
 type rarSource struct {
 	r         *rardecode.ReadCloser
-	entries   int
-	total     int64
 	password  string
 	encrypted bool // the current member
 }
@@ -46,7 +44,7 @@ func openRar(path, password string, p *Progress) (source, error) {
 	if err != nil {
 		return nil, rarError(err, password, false)
 	}
-	return &rarSource{r: r, entries: len(files), total: total, password: password}, nil
+	return &rarSource{r: r, password: password}, nil
 }
 
 func (s *rarSource) next() (*member, error) {
@@ -74,17 +72,7 @@ func (s *rarSource) next() (*member, error) {
 }
 
 func (s *rarSource) countsInput() bool { return false }
-
-// systemPlan hands a RAR without a password to tar.exe. libarchive does
-// not follow multi-part RARs, so tar.exe fails on those and the engine,
-// which does, takes over.
-func (s *rarSource) systemPlan(bool) (systemPlan, bool) {
-	if s.password != "" {
-		return systemPlan{}, false
-	}
-	return systemPlan{entries: s.entries, bytes: s.total}, true
-}
-func (s *rarSource) Close() error { return s.r.Close() }
+func (s *rarSource) Close() error      { return s.r.Close() }
 
 type rarReader struct{ s *rarSource }
 

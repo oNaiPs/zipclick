@@ -32,7 +32,6 @@ import (
 type zipSource struct {
 	r        *zip.Reader
 	f        *os.File
-	total    int64
 	i        int
 	password string
 	oem      *charmap.Charmap
@@ -73,7 +72,7 @@ func openZip(path, password string, p *Progress) (src source, err error) {
 		return nil, ErrEncrypted
 	}
 	p.setTotal(total)
-	return &zipSource{r: r, f: f, total: total, password: password, oem: oemDecoder()}, nil
+	return &zipSource{r: r, f: f, password: password, oem: oemDecoder()}, nil
 }
 
 func (s *zipSource) next() (*member, error) {
@@ -96,22 +95,7 @@ func (s *zipSource) next() (*member, error) {
 
 func (s *zipSource) countsInput() bool { return false }
 func (s *zipSource) parallel() bool    { return true }
-
-// systemPlan hands a zip to tar.exe when it has enough files for Defender's
-// per-file cost to dominate, and only when tar.exe would write exactly what
-// ZipClick would: no password, plain names, Store or Deflate.
-func (s *zipSource) systemPlan(force bool) (systemPlan, bool) {
-	if !force && len(s.r.File) <= fewFiles {
-		return systemPlan{}, false
-	}
-	for _, f := range s.r.File {
-		if f.Flags&0x1 != 0 || (f.Method != zip.Store && f.Method != zip.Deflate) || !plainName(f.Name, f.NonUTF8) {
-			return systemPlan{}, false
-		}
-	}
-	return systemPlan{entries: len(s.r.File), bytes: s.total}, true
-}
-func (s *zipSource) Close() error { return s.f.Close() }
+func (s *zipSource) Close() error      { return s.f.Close() }
 
 // The compression methods ZipClick reads: Store and Deflate, which archive/zip
 // does itself unless the member is encrypted, and the others zips in the wild

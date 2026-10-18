@@ -94,13 +94,48 @@ func TestTidyTreeRemovesLinksAndMacJunk(t *testing.T) {
 	if err := os.Symlink(outside, filepath.Join(root, "pkg", "link")); err != nil {
 		t.Skip("no symlinks here:", err)
 	}
-	tops, err := tidyTree(root)
-	if err != nil {
-		t.Fatal(err)
+	removed, err := tidyTree(root)
+	if err != nil || removed {
+		t.Fatalf("removed=%v err=%v: links and junk are not gaps to fill", removed, err)
 	}
+	tops, _ := topNames(root)
 	eq(t, tops, []string{"pkg"})
 	eq(t, tree(t, root), []string{"pkg/", "pkg/__MACOSX/", "pkg/a.txt"})
 	if b, _ := os.ReadFile(filepath.Join(outside, "keep.txt")); string(b) != "keep" {
 		t.Fatal("followed the link")
+	}
+}
+
+func TestTidyTreeRemovesNamesWindowsRefusesAndSaysSo(t *testing.T) {
+	root := t.TempDir()
+	os.MkdirAll(filepath.Join(root, "src", "i2c"), 0o755)
+	os.WriteFile(filepath.Join(root, "src", "i2c", "ok.c"), []byte("ok"), 0o644)
+	// What tar.exe writes through a \\?\ path; here, a plain file.
+	os.WriteFile(filepath.Join(root, "src", "i2c", "aux.c"), []byte("aux"), 0o644)
+	removed, err := tidyTree(root)
+	if err != nil || !removed {
+		t.Fatalf("removed=%v err=%v, want the bad name removed and reported", removed, err)
+	}
+	eq(t, tree(t, root), []string{"src/", "src/i2c/", "src/i2c/ok.c"})
+}
+
+// After tar.exe, the engine writes only what is missing, by its own rules.
+func TestFillingInWritesOnlyWhatIsMissing(t *testing.T) {
+	dir := t.TempDir()
+	archive := zipOf(t, dir, "fill.zip", [][2]string{{"pkg/a.txt", "from the archive"}, {"pkg/aux.c", "aux"}, {"pkg/b.txt", "b"}})
+	stage := filepath.Join(dir, "stage")
+	os.MkdirAll(filepath.Join(stage, "pkg"), 0o755)
+	os.WriteFile(filepath.Join(stage, "pkg", "a.txt"), []byte("written by tar.exe"), 0o644)
+	src, err := openZip(archive, "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer src.Close()
+	if _, err := writeAllMissing(stage, src, nil); err != nil {
+		t.Fatal(err)
+	}
+	eq(t, tree(t, stage), []string{"pkg/", "pkg/_aux.c", "pkg/a.txt", "pkg/b.txt"})
+	if b, _ := os.ReadFile(filepath.Join(stage, "pkg", "a.txt")); string(b) != "written by tar.exe" {
+		t.Fatal("rewrote a file that was already there")
 	}
 }

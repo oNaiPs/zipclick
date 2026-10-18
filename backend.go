@@ -78,6 +78,10 @@ type planner interface {
 // systemExtracts counts archives tar.exe extracted, for the tests.
 var systemExtracts atomic.Int64
 
+// errPartial is what the tar.exe path returns when tar.exe failed on some
+// members only.
+var errPartial = errors.New("tar.exe failed on some members")
+
 // errUseEngine is what the tar.exe path returns when ZipClick's own engine
 // should extract the archive instead.
 var errUseEngine = errors.New("extract with the built-in engine")
@@ -124,10 +128,13 @@ func isASCII(s string) bool {
 
 // tidyTree removes from what tar.exe wrote under root everything ZipClick
 // would not have written: links and junctions (libarchive can create them on
-// Windows) and macOS metadata. It returns the top-level names left.
-func tidyTree(root string) ([]string, error) {
+// Windows), macOS metadata, and names Windows refuses (tar.exe writes
+// through \\?\ paths, which let a file be called "aux.c" or end in a dot;
+// ZipClick's engine writes those as "_aux.c" and without the dot). removed
+// reports whether any such name went, so the engine has gaps to fill.
+func tidyTree(root string) (removed bool, err error) {
 	var junk []string
-	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+	err = filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -136,29 +143,66 @@ func tidyTree(root string) ([]string, error) {
 		}
 		rel, _ := filepath.Rel(root, p)
 		rel = filepath.ToSlash(rel)
-		if d.Type()&(fs.ModeSymlink|fs.ModeIrregular) != 0 || isMacJunk(rel) {
+		bad := sanitizeComponent(d.Name()) != d.Name()
+		if bad || d.Type()&(fs.ModeSymlink|fs.ModeIrregular) != 0 || isMacJunk(rel) {
 			junk = append(junk, p)
+			removed = removed || bad
 			if d.IsDir() {
-				return filepath.SkipDir
+				return filepath.SkipDir // never read a folder called "con"
 			}
 		}
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return false, err
 	}
 	for _, p := range junk {
-		// Remove, not RemoveAll, for a link: never follow it.
-		if fi, err := os.Lstat(p); err == nil && fi.Mode()&(fs.ModeSymlink|fs.ModeIrregular) != 0 {
-			if err := os.Remove(p); err != nil {
-				return nil, err
-			}
-			continue
-		}
-		if err := os.RemoveAll(p); err != nil {
-			return nil, err
+		if err := removeVerbatim(p); err != nil {
+			return false, err
 		}
 	}
+	return removed, nil
+}
+
+// verbatimRel is a member name as tar.exe wrote it under the destination,
+// without ZipClick's renaming: leading slashes and drive letters dropped,
+// as libarchive does. ok is false for a name tar.exe would have refused.
+func verbatimRel(name string) (string, bool) {
+	name = strings.ReplaceAll(name, `\`, "/")
+	var parts []string
+	for _, p := range strings.Split(name, "/") {
+		switch {
+		case p == "" || p == ".":
+			continue
+		case p == "..":
+			return "", false
+		case len(parts) == 0 && len(p) == 2 && p[1] == ':':
+			continue
+		}
+		parts = append(parts, p)
+	}
+	if len(parts) == 0 {
+		return "", false
+	}
+	return strings.Join(parts, "/"), true
+}
+
+// emptyDir removes everything inside dir, keeping dir.
+func emptyDir(dir string) error {
+	ents, err := os.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+	for _, e := range ents {
+		if err := removeVerbatim(filepath.Join(dir, e.Name())); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// topNames lists root's entries, sorted.
+func topNames(root string) ([]string, error) {
 	ents, err := os.ReadDir(root)
 	if err != nil {
 		return nil, err
@@ -169,18 +213,4 @@ func tidyTree(root string) ([]string, error) {
 	}
 	sort.Strings(tops)
 	return tops, nil
-}
-
-// emptyDir removes everything inside dir, keeping dir.
-func emptyDir(dir string) error {
-	ents, err := os.ReadDir(dir)
-	if err != nil {
-		return err
-	}
-	for _, e := range ents {
-		if err := os.RemoveAll(filepath.Join(dir, e.Name())); err != nil {
-			return err
-		}
-	}
-	return nil
 }

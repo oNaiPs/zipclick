@@ -36,13 +36,16 @@ func systemTarAvailable() bool {
 	return err == nil
 }
 
-// systemExtract has tar.exe extract archive into stage. It returns
-// errUseEngine (wrapped) when tar.exe could not, and ErrCancelled or
+// systemExtract has tar.exe extract archive into stage and returns the
+// members it reported failing on. err is nil when tar.exe succeeded;
+// errPartial when it failed only on those members (whose files, if any,
+// must not be trusted); errUseEngine when it failed in a way that is not
+// tied to a member, and nothing it wrote can be trusted; ErrCancelled or
 // ErrDiskFull when it was stopped for those reasons.
-func systemExtract(archive, stage string, plan systemPlan, p *Progress) error {
+func systemExtract(archive, stage string, plan systemPlan, p *Progress) (failed []string, err error) {
 	if plan.bytes > 0 {
 		if err := roomFor(stage, plan.bytes); err != nil {
-			return err
+			return nil, err
 		}
 	}
 	src := archive
@@ -58,7 +61,7 @@ func systemExtract(archive, stage string, plan systemPlan, p *Progress) error {
 	if plan.stdin {
 		f, err := os.Open(archive)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		defer f.Close()
 		if fi, err := f.Stat(); err == nil {
@@ -70,10 +73,10 @@ func systemExtract(archive, stage string, plan systemPlan, p *Progress) error {
 	}
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("%w: %v", errUseEngine, err)
+		return nil, fmt.Errorf("%w: %v", errUseEngine, err)
 	}
 
 	var stopped atomic.Value // the error to report once tar.exe is killed
@@ -105,32 +108,57 @@ func systemExtract(archive, stage string, plan systemPlan, p *Progress) error {
 		}
 	}()
 
-	var lines []string
+	// Each member is "x NAME", or "x NAME: MESSAGE" when it failed. Any
+	// other line is about the archive as a whole, and only these two are
+	// known to be harmless.
+	var unexplained []string
 	n := 0
 	sc := bufio.NewScanner(stderr)
+	sc.Buffer(make([]byte, 64<<10), 1<<20)
 	for sc.Scan() {
 		line := sc.Text()
-		if strings.HasPrefix(line, "x ") {
+		if name, ok := strings.CutPrefix(line, "x "); ok {
+			if i := strings.Index(name, ": "); i >= 0 {
+				failed = append(failed, name[:i])
+			}
 			n++
 			if !plan.stdin && plan.entries > 0 && plan.bytes > 0 && n <= plan.entries {
 				p.setDone(plan.bytes * int64(n) / int64(plan.entries))
 			}
-		} else if len(lines) < 5 {
-			lines = append(lines, line)
+			continue
+		}
+		if strings.Contains(line, "Error exit delayed from previous errors") ||
+			strings.Contains(line, "Archive entry has empty or unreadable filename") {
+			continue
+		}
+		if line != "" && len(unexplained) < 5 {
+			unexplained = append(unexplained, line)
 		}
 	}
-	err = cmd.Wait()
+	werr := cmd.Wait()
 	close(done)
 	if why, ok := stopped.Load().(error); ok {
-		return why
+		return nil, why
 	}
+	switch {
+	case len(unexplained) > 0:
+		return nil, fmt.Errorf("%w: tar.exe: %s", errUseEngine, strings.Join(unexplained, "; "))
+	case werr != nil:
+		return failed, fmt.Errorf("%w: tar.exe: %v", errPartial, werr)
+	}
+	p.setDone(p.Total())
+	return failed, nil
+}
+
+// removeVerbatim deletes p without Windows reinterpreting the name: through
+// a \\?\ path, "aux.c" is a file, not the AUX device. A link is removed,
+// never followed.
+func removeVerbatim(p string) error {
+	abs, err := filepath.Abs(p)
 	if err != nil {
-		return fmt.Errorf("%w: tar.exe: %v %s", errUseEngine, err, strings.Join(lines, "; "))
+		return err
 	}
-	if p != nil {
-		p.setDone(p.total.Load())
-	}
-	return nil
+	return os.RemoveAll(`\\?\` + abs)
 }
 
 // savedBackend is the backend chosen with "zipclick backend MODE".

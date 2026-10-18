@@ -81,6 +81,14 @@ func (p *Progress) setTotal(n int64) {
 	}
 }
 
+// Total is the total set so far; 0 for a nil Progress.
+func (p *Progress) Total() int64 {
+	if p == nil {
+		return 0
+	}
+	return p.total.Load()
+}
+
 func (p *Progress) setDone(n int64) {
 	if p != nil {
 		p.done.Store(n)
@@ -170,19 +178,46 @@ func Extract(archive, password string, p *Progress) (dst string, err error) {
 // the archive allow it, else (or if tar.exe fails) with ZipClick's engine.
 func extractInto(archive, stage string, src source, p *Progress) ([]string, error) {
 	if plan, ok := planFor(src); ok {
-		err := systemExtract(archive, stage, plan, p)
-		if err == nil {
-			systemExtracts.Add(1)
-			return tidyTree(stage)
-		}
+		failed, err := systemExtract(archive, stage, plan, p)
 		if errors.Is(err, ErrCancelled) || errors.Is(err, ErrDiskFull) {
 			return nil, err
 		}
-		// Start again from nothing; src has not been read yet.
-		if err := emptyDir(stage); err != nil {
-			return nil, err
+		if errors.Is(err, errUseEngine) {
+			// Nothing tar.exe wrote can be trusted: start from nothing.
+			if err := emptyDir(stage); err != nil {
+				return nil, err
+			}
+			p.setDone(0)
+			return writeAll(stage, src, p)
+		}
+		// A member tar.exe failed on may have left a file behind (an
+		// encrypted 7z leaves garbage of the right size): it goes, and the
+		// engine writes it, or reports why it cannot.
+		for _, name := range failed {
+			if rel, ok := verbatimRel(name); ok {
+				if err := removeVerbatim(filepath.Join(stage, filepath.FromSlash(rel))); err != nil {
+					return nil, err
+				}
+			}
+		}
+		// Whatever tar.exe wrote that ZipClick would not have (links,
+		// macOS metadata, names Windows itself refuses) goes. If that
+		// left gaps, or tar.exe stopped short (it cannot make links on
+		// Windows, and fails over them), the engine fills in exactly what
+		// is missing, by its own rules; src has not been read yet.
+		removed, terr := tidyTree(stage)
+		if terr != nil {
+			return nil, terr
+		}
+		if err == nil && !removed {
+			systemExtracts.Add(1)
+			return topNames(stage)
 		}
 		p.setDone(0)
+		if _, err := writeAllMissing(stage, src, p); err != nil {
+			return nil, err
+		}
+		return topNames(stage)
 	}
 	return writeAll(stage, src, p)
 }
@@ -357,7 +392,17 @@ func uniquePath(dir, name string) string {
 // are read; a zip, whose members can be read in any order, is planned first
 // and its files written several at a time.
 func writeAll(root string, src source, p *Progress) ([]string, error) {
-	w := &writer{root: root, p: p, seen: map[string]bool{}, dirTimes: map[string]time.Time{}}
+	return writeMembers(root, src, p, false)
+}
+
+// writeAllMissing is writeAll that leaves alone every file already there:
+// it fills in what tar.exe could not write.
+func writeAllMissing(root string, src source, p *Progress) ([]string, error) {
+	return writeMembers(root, src, p, true)
+}
+
+func writeMembers(root string, src source, p *Progress, missingOnly bool) ([]string, error) {
+	w := &writer{root: root, p: p, missingOnly: missingOnly, seen: map[string]bool{}, dirTimes: map[string]time.Time{}}
 	if !src.countsInput() {
 		w.count = p
 	}
@@ -412,6 +457,8 @@ type writer struct {
 	dirTimes map[string]time.Time
 	jobs     []*job
 	inflight atomic.Int64 // declared bytes of the files being written
+
+	missingOnly bool // skip files that already exist (filling in after tar.exe)
 }
 
 // job is one file to write.
@@ -443,6 +490,11 @@ func (w *writer) place(m *member) (*job, error) {
 	}
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return nil, err
+	}
+	if w.missingOnly {
+		if _, err := os.Lstat(dst); err == nil {
+			return nil, nil
+		}
 	}
 	if m.hardlink != "" {
 		if target, ok := safeRel(m.hardlink); ok {

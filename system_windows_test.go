@@ -3,9 +3,13 @@
 package main
 
 import (
+	"archive/tar"
+	"bytes"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -65,4 +69,67 @@ func TestTarExeIsStoppedWhenTheDiskFills(t *testing.T) {
 		t.Fatal("tar.exe was not stopped")
 	}
 	eq(t, tree(t, dir), []string{"bomb.tar"})
+}
+
+// tar.exe cannot make the link (and fails over it) and writes aux.c through
+// a \\?\ path; the result must still be what the engine would write.
+func TestTarExeGapsAreFilledByTheEngine(t *testing.T) {
+	if !systemTarAvailable() {
+		t.Skip("no tar.exe")
+	}
+	defer func(m backendMode) { backend = m }(backend)
+	backend = backendTar
+	dir := t.TempDir()
+	archive := filepath.Join(dir, "repo.tar")
+	f, _ := os.Create(archive)
+	w := tar.NewWriter(f)
+	add := func(h *tar.Header, body string) {
+		h.Size = int64(len(body))
+		h.Mode = 0o644
+		w.WriteHeader(h)
+		w.Write([]byte(body))
+	}
+	add(&tar.Header{Name: "repo/a.txt", Typeflag: tar.TypeReg}, "a")
+	add(&tar.Header{Name: "repo/link", Typeflag: tar.TypeSymlink, Linkname: "a.txt"}, "")
+	add(&tar.Header{Name: "repo/i2c/aux.c", Typeflag: tar.TypeReg}, "aux")
+	add(&tar.Header{Name: "repo/z.txt", Typeflag: tar.TypeReg}, "z")
+	w.Close()
+	f.Close()
+	if _, err := Extract(archive, "", nil); err != nil {
+		t.Fatal(err)
+	}
+	eq(t, tree(t, dir), sorted([]string{"repo.tar", "repo/", "repo/a.txt", "repo/i2c/", "repo/i2c/_aux.c", "repo/z.txt"}))
+}
+
+// A damaged archive through tar.exe fails, as through the engine: tar.exe's
+// file for the damaged member is not trusted.
+func TestTarExeDamageIsNotSwallowed(t *testing.T) {
+	if !systemTarAvailable() {
+		t.Skip("no tar.exe")
+	}
+	defer func(m backendMode) { backend = m }(backend)
+	backend = backendTar
+
+	dir := t.TempDir()
+	var files [][2]string
+	for i := range 300 {
+		files = append(files, [2]string{fmt.Sprintf("pkg/f%d.txt", i), strings.Repeat(fmt.Sprintf("line %d\n", i), 2000)})
+	}
+	archive := zipOf(t, dir, "bad.zip", files)
+	b, _ := os.ReadFile(archive)
+	i := bytes.Index(b, []byte("pkg/f150.txt")) + len("pkg/f150.txt") + 60
+	b[i] ^= 0xff
+	os.WriteFile(archive, b, 0o644)
+	if _, err := Extract(archive, "", nil); err == nil {
+		t.Fatal("a damaged zip extracted without an error")
+	}
+	eq(t, tree(t, dir), []string{"bad.zip"})
+
+	dir2, tgz := fixture(t, "album.tar.gz")
+	b, _ = os.ReadFile(tgz)
+	os.WriteFile(tgz, b[:len(b)/2], 0o644)
+	if _, err := Extract(tgz, "", nil); err == nil {
+		t.Fatal("a truncated tar.gz extracted without an error")
+	}
+	eq(t, tree(t, dir2), []string{"album.tar.gz"})
 }

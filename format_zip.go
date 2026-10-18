@@ -16,6 +16,7 @@ import (
 	"hash/crc32"
 	"io"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/klauspost/compress/flate"
@@ -59,9 +60,7 @@ func openZip(path, password string, p *Progress) (src source, err error) {
 	if err != nil {
 		return nil, err
 	}
-	r.RegisterDecompressor(zip.Deflate, func(r io.Reader) io.ReadCloser {
-		return flate.NewReader(bufio.NewReaderSize(r, readAheadSize))
-	})
+	r.RegisterDecompressor(zip.Deflate, newInflater)
 	var total int64
 	encrypted := false
 	for _, f := range r.File {
@@ -96,6 +95,43 @@ func (s *zipSource) next() (*member, error) {
 func (s *zipSource) countsInput() bool { return false }
 func (s *zipSource) parallel() bool    { return true }
 func (s *zipSource) Close() error      { return s.f.Close() }
+
+// Deflate members are read through a 1 MiB buffer and inflated by a
+// decompressor that both come from pools: allocating them afresh for each of
+// 15,000 small files cost more than inflating the files.
+var (
+	readAheads = sync.Pool{New: func() any { return bufio.NewReaderSize(nil, readAheadSize) }}
+	inflaters  sync.Pool
+)
+
+func newInflater(r io.Reader) io.ReadCloser {
+	br := readAheads.Get().(*bufio.Reader)
+	br.Reset(r)
+	if fr, ok := inflaters.Get().(io.ReadCloser); ok {
+		if fr.(flate.Resetter).Reset(br, nil) == nil {
+			return &pooledInflater{ReadCloser: fr, br: br}
+		}
+	}
+	return &pooledInflater{ReadCloser: flate.NewReader(br), br: br}
+}
+
+// pooledInflater gives its decompressor and buffer back when closed, once.
+type pooledInflater struct {
+	io.ReadCloser
+	br *bufio.Reader
+}
+
+func (p *pooledInflater) Close() error {
+	if p.br == nil {
+		return nil
+	}
+	err := p.ReadCloser.Close()
+	p.br.Reset(nil)
+	readAheads.Put(p.br)
+	inflaters.Put(p.ReadCloser)
+	p.br = nil
+	return err
+}
 
 // The compression methods ZipClick reads: Store and Deflate, which archive/zip
 // does itself unless the member is encrypted, and the others zips in the wild
@@ -149,7 +185,7 @@ func openZipFile(f *zip.File, password string, oem *charmap.Charmap) (io.ReadClo
 	if err != nil {
 		return nil, err
 	}
-	raw := bufio.NewReaderSize(rawSection, readAheadSize)
+	raw := bufio.NewReaderSize(rawSection, int(min(max(f.CompressedSize64, 4096), readAheadSize)))
 	var r io.Reader = raw
 	var auth func() error
 	switch {

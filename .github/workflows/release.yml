@@ -1,9 +1,9 @@
 name: Release
 
-# Pushing a tag v* builds both executables from that commit, has SignPath
-# sign them, and drafts a GitHub release with the result. Nothing is
-# published until the signing request is approved in SignPath and the draft
-# is published by hand.
+# Pushing a tag v* builds both executables from that commit and drafts a
+# GitHub release with them. Nothing is published until the draft is
+# published by hand. The SignPath step is ready for when the project has
+# code signing; SignPath turned it down for now (too few users yet).
 #
 # Actions are pinned to commits, not tags: this job can write releases, and
 # a moved tag would run someone else's code with that permission.
@@ -72,5 +72,4 @@ jobs:
           # checkout can leave the tag lightweight; the notes are its message.
           git fetch --force --tags
           git tag -l --format='%(contents)' "$GITHUB_REF_NAME" > notes.md
-          printf '\nCode signing policy: https://onaips.github.io/zipclick/code-signing.html\n' >> notes.md
           gh release create "$GITHUB_REF_NAME" --draft --title "ZipClick $v" --notes-file notes.md out/*.exe

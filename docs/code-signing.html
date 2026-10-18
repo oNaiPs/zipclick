@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ZipClick: code signing policy</title>
-<meta name="description" content="How ZipClick releases are built and signed, who approves them, and what the program does with your data.">
+<title>ZipClick: code signing</title>
+<meta name="description" content="Why ZipClick is not code-signed yet, and what that means when you run it.">
 <link rel="icon" href="img/favicon-32.png">
 <style>
   :root {
@@ -75,21 +75,16 @@
 
 <h1><a href="./" style="display:flex;align-items:center;gap:10px;color:inherit;text-decoration:none"><img src="img/icon-64.png" alt="">ZipClick</a></h1>
 
-<p class="lede">Code signing policy</p>
+<p class="lede">Why ZipClick isn't code-signed</p>
 
-<p><b>Status: pending.</b> ZipClick has applied to the SignPath Foundation's free code signing program. Until the application is approved, releases are not signed yet, and this policy describes how they will be signed.</p>
+<p>Windows shows a "Windows protected your PC" warning the first time you run ZipClick because the program isn't code-signed. A signature tells Windows who made a program; without one, Windows can only say it doesn't know.</p>
 
-<p>Free code signing provided by <a href="https://about.signpath.io">SignPath.io</a>, certificate by <a href="https://signpath.org">SignPath Foundation</a>.</p>
+<p>Certificates for signing cost money every year. The <a href="https://signpath.org">SignPath Foundation</a> gives them to open source projects for free, but only to projects that already have a following. ZipClick applied in October 2026 and was told to come back once more people use it, which is fair. It will apply again then.</p>
 
-<p>Every release will be built by GitHub Actions from the tagged source code in the <a href="https://github.com/oNaiPs/zipclick">public repository</a>, and only signed after I approve that release in SignPath. Nothing built on anyone's own computer gets signed.</p>
+<p>Until then, every release since 0.4.1 is built by GitHub Actions from the public <a href="https://github.com/oNaiPs/zipclick">source code</a>, in the open, rather than on someone's own computer.</p>
 
-<h2>Team roles</h2>
-<p>Committers and reviewers: <a href="https://github.com/oNaiPs">Jose Pereira</a><br>
-Approvers: <a href="https://github.com/oNaiPs">Jose Pereira</a></p>
-
-<h2>Privacy policy</h2>
-<p>This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it.</p>
-<p>ZipClick has no network code at all. It reads the archive you open and writes the extracted files next to it.</p>
+<h2>Privacy</h2>
+<p>ZipClick has no network code at all and sends nothing anywhere. It reads the archive you open and writes the extracted files next to it.</p>
 
 <footer>
   <a href="./">Back to ZipClick</a>. The <a href="https://github.com/oNaiPs/zipclick">source is on GitHub</a> under the MIT license.

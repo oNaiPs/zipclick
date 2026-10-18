@@ -55,17 +55,9 @@ zipclick status        show where double-clicks on each type go right now
 
 Set `ZIPCLICK_LANG` (for example `pt-PT`) to force a language.
 
-## Code signing policy
+## Code signing
 
-Status: pending. ZipClick has applied to the SignPath Foundation's free code signing program; until it is approved, releases are not signed.
-
-Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).
-
-Committers and reviewers: [Jose Pereira](https://github.com/oNaiPs). Approvers: [Jose Pereira](https://github.com/oNaiPs).
-
-Releases are built by GitHub Actions from the tagged source and signed only after I approve each one in SignPath.
-
-Privacy policy: this program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it. ZipClick has no network code at all.
+ZipClick isn't code-signed. The SignPath Foundation signs open source projects for free, but only once they have a following; ZipClick applied in October 2026 and was told to come back when more people use it. Since 0.4.1, releases are built by GitHub Actions from the tagged source, in the open. ZipClick has no network code and sends nothing anywhere.
 
 ## Building
 
@@ -76,7 +68,7 @@ You need Go. It cross-compiles from any OS.
 ./build.sh 0.4.1    # writes dist/zipclick-amd64.exe and dist/zipclick-arm64.exe
 ```
 
-A release is a tag: `git tag -a v0.5.0 -m "what changed"` and `git push origin v0.5.0`. The workflow in `.github/workflows/release.yml` tests, builds, sends both executables to SignPath and drafts the GitHub release with the signed files and the tag message as notes. Approve the signing request in SignPath, check the draft, publish it.
+A release is a tag: `git tag -a v0.5.0 -m "what changed"` and `git push origin v0.5.0`. The workflow in `.github/workflows/release.yml` tests, builds and drafts the GitHub release with the tag message as notes; check the draft and publish it. It also has a SignPath signing step that stays off until the repository has SignPath credentials.
 
 The archives the tests use are in `testdata/`, made by `testdata/make.sh`. The icon, manifest and version info live in `winres/`. `build.sh` regenerates `rsrc_windows_*.syso` from them with go-winres, and `go build` embeds those.
 

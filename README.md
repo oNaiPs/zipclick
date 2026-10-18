@@ -11,6 +11,8 @@ does it on macOS — instead of being opened as a folder.
 - The result is **selected** in the Explorer window you double-clicked in.
 - Anything that takes more than a moment gets a **progress window** with the
   size, time left and Cancel — which leaves nothing behind.
+- Speaks English, Portuguese (Portugal and Brazil), Spanish, French, German and
+  Italian, following the Windows display language.
 - `__MACOSX/` and `.DS_Store` from Mac-made zips are dropped; names are decoded
   from the OEM code page when the zip didn't use UTF-8, and macOS's decomposed
   accents are normalised.

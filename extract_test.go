@@ -268,9 +268,9 @@ func TestDetailText(t *testing.T) {
 	}{
 		{0, 500, time.Second, "0 bytes of 500 bytes"},
 		{1 << 20, 40 << 20, time.Second, "1.0 MB of 40.0 MB"},
-		{10 << 20, 40 << 20, 10 * time.Second, "10.0 MB of 40.0 MB — about 30 seconds left"},
-		{39 << 20, 40 << 20, 10 * time.Second, "39.0 MB of 40.0 MB — a few seconds left"},
-		{1 << 30, 10 << 30, 30 * time.Second, "1.0 GB of 10.0 GB — about 5 minutes left"},
+		{10 << 20, 40 << 20, 10 * time.Second, "10.0 MB of 40.0 MB, about 30 seconds left"},
+		{39 << 20, 40 << 20, 10 * time.Second, "39.0 MB of 40.0 MB, a few seconds left"},
+		{1 << 30, 10 << 30, 30 * time.Second, "1.0 GB of 10.0 GB, about 5 minutes left"},
 	} {
 		if got := detailText(c.done, c.total, c.elapsed); got != c.want {
 			t.Errorf("detailText(%d, %d, %v) = %q, want %q", c.done, c.total, c.elapsed, got, c.want)

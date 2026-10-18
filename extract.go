@@ -28,6 +28,14 @@ var ErrEmpty = errors.New("the archive is empty")
 // ErrCancelled is returned when Progress.Cancel stopped an extraction.
 var ErrCancelled = errors.New("cancelled")
 
+// MethodError is returned for a member compressed with a method archive/zip
+// cannot read (Deflate64, which Explorer uses for very large files, say).
+type MethodError struct{ Method uint16 }
+
+func (e *MethodError) Error() string {
+	return fmt.Sprintf("compression method %d is not supported", e.Method)
+}
+
 // Progress is shared between an extraction and whoever watches it: the
 // extraction fills in Total and advances Done, the watcher may Cancel. All
 // methods are safe from any goroutine, and a nil *Progress does nothing.
@@ -73,7 +81,7 @@ type entry struct {
 func Extract(archive string, p *Progress) (string, error) {
 	r, err := zip.OpenReader(archive)
 	if err != nil {
-		return "", fmt.Errorf("cannot read %s: %w", filepath.Base(archive), err)
+		return "", err
 	}
 	defer r.Close()
 
@@ -305,7 +313,7 @@ func writeFile(dst string, f *zip.File, p *Progress) error {
 	rc, err := f.Open()
 	if err != nil {
 		if errors.Is(err, zip.ErrAlgorithm) {
-			return fmt.Errorf("compression method %d is not supported", f.Method)
+			return &MethodError{f.Method}
 		}
 		return err
 	}

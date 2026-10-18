@@ -3,6 +3,7 @@
 package main
 
 import (
+	"fmt"
 	"path/filepath"
 	"runtime"
 	"syscall"
@@ -105,7 +106,7 @@ type wndClassEx struct {
 	IconSm     uintptr
 }
 
-type msg struct {
+type winMsg struct {
 	Hwnd    uintptr
 	Message uint32
 	WParam  uintptr
@@ -181,7 +182,7 @@ func withProgress(archive string, p *Progress, work func() error) error {
 		<-done // no window, but the work still finishes
 		return err
 	}
-	var m msg
+	var m winMsg
 	for {
 		r, _, _ := pGetMessage.Call(uintptr(unsafe.Pointer(&m)), 0, 0, 0)
 		if int32(r) <= 0 {
@@ -229,7 +230,7 @@ func (u *progressUI) open() bool {
 	pGetDpiForMonitor.Call(mon, 0, uintptr(unsafe.Pointer(&dpiX)), uintptr(unsafe.Pointer(&dpiY)))
 	px := func(v int32) int32 { return v * int32(dpiX) / 96 }
 
-	const w, h, m = 420, 112, 16
+	const w, h, m = 420, 108, 16
 	rc := rect{0, 0, px(w), px(h)}
 	style := uintptr(wsCaption | wsSysMenu)
 	pAdjustWindowRectDpi.Call(uintptr(unsafe.Pointer(&rc)), style, 0, wsExDlgModal, uintptr(dpiX))
@@ -244,10 +245,13 @@ func (u *progressUI) open() bool {
 	child := func(cls, text string, st uintptr, x, y, cx, cy, id int32) uintptr {
 		return create(0, utf16(cls), text, wsChild|wsVisible|st, px(x), px(y), px(cx), px(cy), u.hwnd, uintptr(id), inst)
 	}
-	u.caption = child("STATIC", "Extracting “"+u.title+"”", ssNoPrefix|ssEndEllipsis, m, m, w-2*m, 20, 0)
-	u.bar = child("msctls_progress32", "", 0, m, m+28, w-2*m, 14, 0)
-	u.detail = child("STATIC", "", ssNoPrefix|ssEndEllipsis, m, m+54, w-3*m-88, 20, 0)
-	u.button = child("BUTTON", "Cancel", wsTabStop|bsDefPush, w-m-88, m+50, 88, 28, idCancel)
+	// Caption; bar with Cancel beside it; detail across the whole width,
+	// since "noch etwa 30 Sekunden" is half again as long as the English.
+	const bw = 88
+	u.caption = child("STATIC", fmt.Sprintf(msg.Extracting, u.title), ssNoPrefix|ssEndEllipsis, m, m, w-2*m, 20, 0)
+	u.bar = child("msctls_progress32", "", 0, m, m+29, w-3*m-bw+8, 14, 0)
+	u.button = child("BUTTON", msg.Cancel, wsTabStop|bsDefPush, w-m-bw, m+22, bw, 28, idCancel)
+	u.detail = child("STATIC", "", ssNoPrefix|ssEndEllipsis, m, m+56, w-2*m, 20, 0)
 	pSendMessage.Call(u.bar, pbmSetRng, 0, 1000)
 
 	ncm := nonClientMetrics{Size: uint32(unsafe.Sizeof(nonClientMetrics{}))}
@@ -300,7 +304,7 @@ func (u *progressUI) cancel() {
 	u.stopping = true
 	u.p.Cancel()
 	pEnableWindow.Call(u.button, 0)
-	u.setDetail("Stopping…")
+	u.setDetail(msg.Stopping)
 }
 
 func (u *progressUI) tick() {

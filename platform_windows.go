@@ -109,17 +109,23 @@ func reveal(p string) {
 	procSHOpenSelect.Call(pidl, 0, 0, 0)
 }
 
-func messageBox(title, msg string, yesNo bool) bool {
-	flags := uint32(windows.MB_OK | windows.MB_ICONINFORMATION)
-	if yesNo {
-		flags = windows.MB_YESNO | windows.MB_ICONQUESTION
-	} else if strings.HasPrefix(msg, "Could not") {
-		flags = windows.MB_OK | windows.MB_ICONWARNING
-	}
+func messageBox(title, text string, kind int) bool {
+	flags := map[int]uint32{
+		boxInfo:     windows.MB_OK | windows.MB_ICONINFORMATION,
+		boxWarning:  windows.MB_OK | windows.MB_ICONWARNING,
+		boxQuestion: windows.MB_YESNO | windows.MB_ICONQUESTION,
+	}[kind]
 	t, _ := windows.UTF16PtrFromString(title)
-	m, _ := windows.UTF16PtrFromString(msg)
+	m, _ := windows.UTF16PtrFromString(text)
 	ret, _ := windows.MessageBox(0, m, t, flags|windows.MB_SETFOREGROUND)
 	return ret == idYes
+}
+
+// preferredLanguages is the user's Windows display languages, in order
+// ("pt-PT", "en-US"...).
+func preferredLanguages() []string {
+	l, _ := windows.GetUserPreferredUILanguages(windows.MUI_LANGUAGE_NAME)
+	return l
 }
 
 func installDir() string {
@@ -151,16 +157,14 @@ func install() error {
 	procSHChangeNoti.Call(shcneAssocChanged, shcnfIDList, 0, 0)
 
 	if currentProgID() == progID {
-		info(appName, "ZipClick is installed and already the default for .zip files.")
+		info(appName, msg.Installed)
 		return nil
 	}
 	if quiet {
 		fmt.Println("registered; choose ZipClick for .zip in " + settingsURI)
 		return nil
 	}
-	messageBox(appName, "Almost done. Windows only lets you choose the default app yourself.\n\n"+
-		"In the Settings page that opens next, click the box under .zip and choose ZipClick.\n\n"+
-		"Until then you can also right-click any .zip → Show more options → Extract here (ZipClick).", false)
+	messageBox(appName, msg.AlmostDone, boxInfo)
 	return windows.ShellExecute(0, utf16("open"), utf16(settingsURI), nil, nil, windows.SW_SHOWNORMAL)
 }
 
@@ -169,7 +173,7 @@ func register(exe string) error {
 	icon := zipIcon()
 
 	// The ProgID double-clicks resolve to once it is the user's choice.
-	if err := setValues(classes+`\`+progID, map[string]string{"": "ZIP archive", "FriendlyTypeName": "ZIP archive"}); err != nil {
+	if err := setValues(classes+`\`+progID, map[string]string{"": msg.TypeName, "FriendlyTypeName": msg.TypeName}); err != nil {
 		return err
 	}
 	if err := setExpand(classes+`\`+progID+`\DefaultIcon`, icon); err != nil {
@@ -178,7 +182,7 @@ func register(exe string) error {
 	if err := setValues(classes+`\`+progID+`\shell`, map[string]string{"": "open"}); err != nil {
 		return err
 	}
-	if err := setValues(classes+`\`+progID+`\shell\open`, map[string]string{"": "Extract"}); err != nil {
+	if err := setValues(classes+`\`+progID+`\shell\open`, map[string]string{"": msg.VerbExtract}); err != nil {
 		return err
 	}
 	if err := setValues(classes+`\`+progID+`\shell\open\command`, map[string]string{"": cmd}); err != nil {
@@ -200,7 +204,7 @@ func register(exe string) error {
 	}
 	if err := setValues(capabilities, map[string]string{
 		"ApplicationName":        appName,
-		"ApplicationDescription": "Extract .zip files with a double-click, like on a Mac.",
+		"ApplicationDescription": msg.AppDescription,
 	}); err != nil {
 		return err
 	}
@@ -212,7 +216,7 @@ func register(exe string) error {
 	}
 
 	// A context-menu verb on every .zip, whatever the default is.
-	if err := setValues(contextVerb, map[string]string{"": "Extract here (ZipClick)", "Icon": exe}); err != nil {
+	if err := setValues(contextVerb, map[string]string{"": msg.VerbExtractHere, "Icon": exe}); err != nil {
 		return err
 	}
 	if err := setValues(contextVerb+`\command`, map[string]string{"": cmd}); err != nil {
@@ -262,7 +266,7 @@ func uninstall() error {
 	if err := errors.Join(errs...); err != nil {
 		return err
 	}
-	info(appName, "ZipClick has been removed. Double-clicking a .zip opens it in Explorer again.")
+	info(appName, msg.Removed)
 	return nil
 }
 

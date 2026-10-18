@@ -6,9 +6,11 @@
 //	zipclick install       copy to %LOCALAPPDATA%\Programs\ZipClick and register
 //	zipclick uninstall     remove the registration and the installed copy
 //	zipclick status        print where .zip double-clicks currently go
+//	zipclick backend [M]   show or set how archives are written: auto, builtin, tar
 //
 // --quiet (anywhere) replaces dialogs with text on stderr, for scripts, and
-// --password=PW supplies the password that would otherwise be asked for.
+// --password=PW supplies the password that would otherwise be asked for, and
+// --backend=M picks the backend for this run only.
 package main
 
 import (
@@ -23,8 +25,9 @@ import (
 const appName = "ZipClick"
 
 var (
-	quiet    bool
-	password string
+	quiet       bool
+	password    string
+	backendFlag string
 )
 
 func main() {
@@ -35,16 +38,28 @@ func main() {
 			quiet = true
 		} else if pw, ok := strings.CutPrefix(a, "--password="); ok {
 			password = pw
+		} else if b, ok := strings.CutPrefix(a, "--backend="); ok {
+			backendFlag = b
 		} else {
 			args = append(args, a)
 		}
+	}
+
+	chooseBackend()
+	if backendFlag != "" {
+		m, err := parseBackend(backendFlag)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(2)
+		}
+		backend = m
 	}
 
 	if len(args) == 0 {
 		if !quiet && ask(appName, msg.InstallPrompt) {
 			args = []string{"install"}
 		} else {
-			fmt.Fprintln(os.Stderr, "usage: zipclick [--quiet] [--password=PW] ARCHIVE... | install | uninstall | status")
+			fmt.Fprintln(os.Stderr, "usage: zipclick [--quiet] [--password=PW] [--backend=auto|builtin|tar] ARCHIVE... | install | uninstall | status | backend [auto|builtin|tar]")
 			os.Exit(2)
 		}
 	}
@@ -56,6 +71,8 @@ func main() {
 		exit(uninstall())
 	case "status":
 		exit(status())
+	case "backend":
+		exit(setBackend(args[1:]))
 	}
 
 	failed := false
@@ -101,6 +118,23 @@ func extract(archive string) (string, error) {
 			return "", ErrCancelled
 		}
 	}
+}
+
+// setBackend shows the backend, or saves a new one for every later run.
+func setBackend(args []string) error {
+	if len(args) == 0 {
+		fmt.Printf("backend: %s (auto, builtin or tar; tar.exe available: %v)\n", backend, systemTarAvailable())
+		return nil
+	}
+	m, err := parseBackend(args[0])
+	if err != nil {
+		return err
+	}
+	if err := saveBackend(m); err != nil {
+		return err
+	}
+	fmt.Printf("backend: %s\n", m)
+	return nil
 }
 
 func report(archive string, err error) {

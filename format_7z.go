@@ -13,6 +13,7 @@ import (
 type sevenZipSource struct {
 	r        *sevenzip.Reader
 	f        *os.File
+	total    int64
 	i        int
 	password string
 }
@@ -43,7 +44,7 @@ func open7z(path, password string, p *Progress) (src source, err error) {
 		total += int64(f.UncompressedSize)
 	}
 	p.setTotal(total)
-	return &sevenZipSource{r: r, f: f, password: password}, nil
+	return &sevenZipSource{r: r, f: f, total: total, password: password}, nil
 }
 
 func (s *sevenZipSource) next() (*member, error) {
@@ -71,7 +72,17 @@ func (s *sevenZipSource) next() (*member, error) {
 }
 
 func (s *sevenZipSource) countsInput() bool { return false }
-func (s *sevenZipSource) Close() error      { return s.f.Close() }
+
+// systemPlan hands a 7z without a password to tar.exe, whose LZMA is several
+// times faster. A tar.exe too old for 7z simply fails, and the engine takes
+// over.
+func (s *sevenZipSource) systemPlan(bool) (systemPlan, bool) {
+	if s.password != "" {
+		return systemPlan{}, false
+	}
+	return systemPlan{entries: len(s.r.File), bytes: s.total}, true
+}
+func (s *sevenZipSource) Close() error { return s.f.Close() }
 
 type sevenZipReader struct {
 	io.ReadCloser

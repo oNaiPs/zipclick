@@ -41,4 +41,10 @@ func (s *tarSource) next() (*member, error) {
 }
 
 func (s *tarSource) countsInput() bool { return true }
-func (s *tarSource) Close() error      { return s.c.Close() }
+
+// systemPlan hands a tar, compressed or not, to tar.exe on stdin, so the
+// progress still counts the archive's bytes as they are read.
+func (s *tarSource) systemPlan(bool) (systemPlan, bool) {
+	return systemPlan{stdin: true}, true
+}
+func (s *tarSource) Close() error { return s.c.Close() }

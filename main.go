@@ -1,20 +1,20 @@
-// ZipClick makes double-clicking a .zip on Windows extract it, the way
-// Archive Utility does on macOS.
+// ZipClick makes double-clicking an archive on Windows (.zip, .7z, .rar,
+// .tar.gz and the like) extract it, the way Archive Utility does on macOS.
 //
-//	zipclick FILE.zip...   extract each archive next to itself
+//	zipclick ARCHIVE...    extract each archive next to itself
 //	zipclick               (run from Explorer) offer to install
 //	zipclick install       copy to %LOCALAPPDATA%\Programs\ZipClick and register
 //	zipclick uninstall     remove the registration and the installed copy
 //	zipclick status        print where .zip double-clicks currently go
 //
-// --quiet (anywhere) replaces dialogs with text on stderr, for scripts.
+// --quiet (anywhere) replaces dialogs with text on stderr, for scripts, and
+// --password=PW supplies the password that would otherwise be asked for.
 package main
 
 import (
-	"archive/zip"
 	"errors"
 	"fmt"
-	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -22,7 +22,10 @@ import (
 
 const appName = "ZipClick"
 
-var quiet bool
+var (
+	quiet    bool
+	password string
+)
 
 func main() {
 	setLanguage()
@@ -30,6 +33,8 @@ func main() {
 	for _, a := range os.Args[1:] {
 		if a == "--quiet" || a == "-q" {
 			quiet = true
+		} else if pw, ok := strings.CutPrefix(a, "--password="); ok {
+			password = pw
 		} else {
 			args = append(args, a)
 		}
@@ -39,7 +44,7 @@ func main() {
 		if !quiet && ask(appName, msg.InstallPrompt) {
 			args = []string{"install"}
 		} else {
-			fmt.Fprintln(os.Stderr, "usage: zipclick FILE.zip... | install | uninstall | status")
+			fmt.Fprintln(os.Stderr, "usage: zipclick [--quiet] [--password=PW] ARCHIVE... | install | uninstall | status")
 			os.Exit(2)
 		}
 	}
@@ -55,12 +60,7 @@ func main() {
 
 	failed := false
 	for _, a := range args {
-		var dst string
-		p := &Progress{}
-		err := withProgress(a, p, func() (err error) {
-			dst, err = Extract(a, p)
-			return err
-		})
+		dst, err := extract(a)
 		if errors.Is(err, ErrCancelled) {
 			continue
 		}
@@ -81,10 +81,32 @@ func main() {
 	}
 }
 
+// extract extracts one archive, with the progress window, asking for the
+// password for as long as the archive needs one and the user keeps trying.
+func extract(archive string) (string, error) {
+	pw := password
+	for {
+		var dst string
+		p := &Progress{}
+		err := withProgress(archive, p, func() (err error) {
+			dst, err = Extract(archive, pw, p)
+			return err
+		})
+		wrong := errors.Is(err, ErrBadPassword)
+		if quiet || !(wrong || errors.Is(err, ErrEncrypted)) {
+			return dst, err
+		}
+		var ok bool
+		if pw, ok = askPassword(filepath.Base(archive), wrong); !ok {
+			return "", ErrCancelled
+		}
+	}
+}
+
 func report(archive string, err error) {
 	text := fmt.Sprintf(msg.CouldNotExtract, filepath.Base(archive)) + "\n\n" + describe(err)
 	var me *MethodError
-	if errors.Is(err, ErrEncrypted) || errors.As(err, &me) || damaged(err) {
+	if errors.As(err, &me) {
 		text += "\n\n" + msg.TryExtractAll
 	}
 	alert(appName, text)
@@ -98,6 +120,10 @@ func describe(err error) string {
 	switch {
 	case errors.Is(err, ErrEncrypted):
 		return msg.Encrypted
+	case errors.Is(err, ErrBadPassword):
+		return msg.BadPassword
+	case errors.Is(err, ErrUnknownFormat):
+		return msg.NotArchive
 	case errors.Is(err, ErrEmpty):
 		return msg.Empty
 	case errors.As(err, &me):
@@ -109,8 +135,15 @@ func describe(err error) string {
 	return strings.ToUpper(s[:1]) + s[1:]
 }
 
+// damaged reports a failure that came from the archive's contents rather
+// than from the disk: the decoders' errors are all of that kind, and the
+// system's (no space, access denied, path too long) all carry a path or an
+// errno.
 func damaged(err error) bool {
-	return errors.Is(err, zip.ErrFormat) || errors.Is(err, zip.ErrChecksum) || errors.Is(err, io.ErrUnexpectedEOF)
+	var pe *fs.PathError
+	var le *os.LinkError
+	var se *os.SyscallError
+	return !errors.As(err, &pe) && !errors.As(err, &le) && !errors.As(err, &se)
 }
 
 func exit(err error) {

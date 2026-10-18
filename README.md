@@ -1,6 +1,6 @@
 # ZipClick
 
-ZipClick makes double-clicking a .zip file on Windows extract it, the way it works on a Mac.
+ZipClick makes double-clicking a .zip, .rar, .7z or .tar.gz file on Windows extract it, the way it works on a Mac.
 
 ![Double-clicking three zip files in Explorer. Each one is extracted next to itself and the result is selected. The large one shows a progress window first.](docs/demo.gif)
 
@@ -10,7 +10,9 @@ Website: https://onaips.github.io/zipclick/
 
 ## Install
 
-Download [ZipClick.exe](https://github.com/oNaiPs/zipclick/releases/latest/download/ZipClick.exe) and run it ([ARM64 build](https://github.com/oNaiPs/zipclick/releases/latest/download/ZipClick-arm64.exe) for Snapdragon PCs). It installs for your user only, without admin rights, and then opens the Default apps page in Settings, where you pick ZipClick for .zip files. Windows doesn't let a program make itself the default, so that one click has to be yours.
+Download [ZipClick.exe](https://github.com/oNaiPs/zipclick/releases/latest/download/ZipClick.exe) and run it ([ARM64 build](https://github.com/oNaiPs/zipclick/releases/latest/download/ZipClick-arm64.exe) for Snapdragon PCs). It installs for your user only, without admin rights, and then opens the Default apps page in Settings, where you pick ZipClick for .zip files. Windows doesn't let a program make itself the default, so that click has to be yours.
+
+The other types are on the same Settings page. If you leave them, Windows asks the first time you open a .rar or .7z which app to use: choose ZipClick, then Always.
 
 The exe isn't code-signed yet, so SmartScreen warns the first time you run it. Click More info, then Run anyway.
 
@@ -18,30 +20,35 @@ To remove it, go to Settings > Apps > Installed apps, find ZipClick and choose U
 
 ## What happens when you double-click
 
-If the zip holds a single folder or file, that item appears next to the zip. If it holds several things, they go into a new folder named after the zip. Nothing is ever overwritten: if the name is taken you get "Photos 2", then "Photos 3".
+If the archive holds a single folder or file, that item appears next to the archive. If it holds several things, they go into a new folder named after the archive. Nothing is ever overwritten: if the name is taken you get "Photos 2", then "Photos 3".
 
-The new item is selected in the Explorer window you were using. A big archive shows a small progress window with a Cancel button. Cancelling leaves nothing behind, because ZipClick extracts into a hidden folder and only renames it into place once everything is written.
+If the archive has a password, ZipClick asks for it, and asks again if it's wrong. The new item is selected in the Explorer window you were using. A big archive shows a small progress window with a Cancel button. Cancelling leaves nothing behind, because ZipClick extracts into a hidden folder and only renames it into place once everything is written.
 
 Zips made on a Mac come without the `__MACOSX` folder and `.DS_Store` files. Zips from older Windows versions, which store names in the old DOS code page, come out with their accents intact.
 
 The dialogs follow your Windows display language. ZipClick speaks English, Portuguese (Portugal and Brazil), Spanish, French, German and Italian.
 
+## Formats
+
+ZipClick reads .zip (including password-protected ones, ZipCrypto or AES, and the Deflate64, BZip2 and LZMA methods), .7z, .rar (RAR 5 and older, multi-part archives too), .tar on its own or compressed as .tar.gz, .tgz, .tar.bz2, .tar.xz and .tar.zst, and single files compressed with gzip, bzip2, xz or zstd. It goes by what's inside the file, not by its extension.
+
 ## Limits
 
-It only handles .zip files, not .rar, .7z or .tar.gz.
+.7z, .xz and .rar archives extract several times slower than 7-Zip or WinRAR would, because their decoders are written in Go: a 1 GB .7z takes about 20 seconds instead of 6. Zip, gzip and zstd are about as fast as the native tools.
 
-Password-protected zips, and zips compressed with Deflate64 (which Windows itself uses for very large files), can't be extracted. ZipClick says so and suggests Extract All, which handles both.
+Symbolic links inside an archive are skipped. Self-extracting .exe archives aren't handled.
 
-You can still open a zip as a folder: right-click it, then Open with > File Explorer.
+You can still look inside a zip without extracting it: right-click it, then Open with > File Explorer.
 
 ## Command line
 
 ```
-zipclick FILE.zip...   extract
+zipclick ARCHIVE...    extract
 zipclick install       install for this user
 zipclick uninstall     remove
-zipclick status        show where .zip double-clicks go right now
+zipclick status        show where double-clicks on each type go right now
 --quiet                no dialogs, messages go to stdout and stderr
+--password=PW          the password, instead of asking for it
 ```
 
 Set `ZIPCLICK_LANG` (for example `pt-PT`) to force a language.
@@ -52,9 +59,11 @@ You need Go. It cross-compiles from any OS.
 
 ```
 go test ./...
-./build.sh 0.3.1    # writes dist/zipclick-amd64.exe and dist/zipclick-arm64.exe
+./build.sh 0.4.0    # writes dist/zipclick-amd64.exe and dist/zipclick-arm64.exe
 ```
 
-The icon, manifest and version info live in `winres/`. `build.sh` regenerates `rsrc_windows_*.syso` from them with go-winres, and `go build` embeds those.
+The archives the tests use are in `testdata/`, made by `testdata/make.sh`. The icon, manifest and version info live in `winres/`. `build.sh` regenerates `rsrc_windows_*.syso` from them with go-winres, and `go build` embeds those.
 
-I test releases on Windows 11 25H2 (x64), clicking through the install, the Settings step, every kind of zip in the test suite, upgrade and uninstall.
+I test releases on Windows 11 25H2 (x64), clicking through the install, the Settings step, every archive in the test suite, upgrade and uninstall.
+
+The formats come from [bodgit/sevenzip](https://github.com/bodgit/sevenzip), [nwaples/rardecode](https://github.com/nwaples/rardecode), [klauspost/compress](https://github.com/klauspost/compress) and [ulikunitz/xz](https://github.com/ulikunitz/xz). The Deflate64 decoder is Go's own inflate with Deflate64's three changes, in `internal/deflate64`.

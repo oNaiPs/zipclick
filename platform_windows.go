@@ -18,17 +18,41 @@ import (
 )
 
 const (
-	progID      = "ZipClick.zip"
 	exeName     = "zipclick.exe"
 	settingsURI = "ms-settings:defaultapps?registeredAppUser=" + appName
 
 	classes       = `Software\Classes`
 	capabilities  = `Software\` + appName + `\Capabilities`
 	uninstallKey  = `Software\Microsoft\Windows\CurrentVersion\Uninstall\` + appName
-	contextVerb   = classes + `\SystemFileAssociations\.zip\shell\` + appName
 	applicationKy = classes + `\Applications\` + exeName
-	userChoice    = `Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\.zip\`
+	fileExts      = `Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\`
 )
+
+// fileTypes are the extensions ZipClick registers for, each with the format
+// name Explorer's Type column shows ("RAR archive"). A .tar.gz is a .gz to
+// Windows, which only looks at the last extension.
+var fileTypes = []struct{ ext, kind string }{
+	{".zip", "ZIP"},
+	{".7z", "7-Zip"},
+	{".rar", "RAR"},
+	{".tar", "TAR"},
+	{".tgz", "TAR"},
+	{".gz", "GZIP"},
+	{".tbz2", "TAR"},
+	{".bz2", "BZIP2"},
+	{".txz", "TAR"},
+	{".xz", "XZ"},
+	{".tzst", "TAR"},
+	{".zst", "Zstandard"},
+}
+
+// progID is what a double-click on ext resolves to once ZipClick is the
+// choice for it: ZipClick.zip, ZipClick.7z...
+func progID(ext string) string { return appName + ext }
+
+func contextVerb(ext string) string {
+	return classes + `\SystemFileAssociations\` + ext + `\shell\` + appName
+}
 
 // version is set at build time: -ldflags "-X main.version=..."
 var version = "dev"
@@ -133,9 +157,9 @@ func installDir() string {
 }
 
 // install copies the running executable to the per-user programs folder and
-// registers it as a handler for .zip. Windows does not let a program make
-// itself the default (the choice is hash-protected), so the last step opens
-// the Default apps page for the user to pick ZipClick there.
+// registers it as a handler for every archive type. Windows does not let a
+// program make itself the default (the choice is hash-protected), so the last
+// step opens the Default apps page for the user to pick ZipClick there.
 func install() error {
 	self, err := os.Executable()
 	if err != nil {
@@ -156,12 +180,12 @@ func install() error {
 	}
 	procSHChangeNoti.Call(shcneAssocChanged, shcnfIDList, 0, 0)
 
-	if currentProgID() == progID {
+	if currentProgID(".zip") == progID(".zip") {
 		info(appName, msg.Installed)
 		return nil
 	}
 	if quiet {
-		fmt.Println("registered; choose ZipClick for .zip in " + settingsURI)
+		fmt.Println("registered; choose ZipClick for each type in " + settingsURI)
 		return nil
 	}
 	messageBox(appName, msg.AlmostDone, boxInfo)
@@ -171,32 +195,47 @@ func install() error {
 func register(exe string) error {
 	cmd := fmt.Sprintf(`"%s" "%%1"`, exe)
 	icon := zipIcon()
+	assoc := map[string]string{}
+	supported := map[string]string{}
 
-	// The ProgID double-clicks resolve to once it is the user's choice.
-	if err := setValues(classes+`\`+progID, map[string]string{"": msg.TypeName, "FriendlyTypeName": msg.TypeName}); err != nil {
-		return err
-	}
-	if err := setExpand(classes+`\`+progID+`\DefaultIcon`, icon); err != nil {
-		return err
-	}
-	if err := setValues(classes+`\`+progID+`\shell`, map[string]string{"": "open"}); err != nil {
-		return err
-	}
-	if err := setValues(classes+`\`+progID+`\shell\open`, map[string]string{"": msg.VerbExtract}); err != nil {
-		return err
-	}
-	if err := setValues(classes+`\`+progID+`\shell\open\command`, map[string]string{"": cmd}); err != nil {
-		return err
+	for _, t := range fileTypes {
+		id := classes + `\` + progID(t.ext)
+		name := fmt.Sprintf(msg.TypeName, t.kind)
+		// The ProgID double-clicks resolve to once it is the user's choice.
+		if err := setValues(id, map[string]string{"": name, "FriendlyTypeName": name}); err != nil {
+			return err
+		}
+		if err := setExpand(id+`\DefaultIcon`, icon); err != nil {
+			return err
+		}
+		if err := setValues(id+`\shell`, map[string]string{"": "open"}); err != nil {
+			return err
+		}
+		if err := setValues(id+`\shell\open`, map[string]string{"": msg.VerbExtract}); err != nil {
+			return err
+		}
+		if err := setValues(id+`\shell\open\command`, map[string]string{"": cmd}); err != nil {
+			return err
+		}
+		// Offered in "Open with" and in Default apps.
+		if err := setValues(classes+`\`+t.ext+`\OpenWithProgids`, map[string]string{progID(t.ext): ""}); err != nil {
+			return err
+		}
+		// A context-menu verb on every file of the type, whatever the default is.
+		if err := setValues(contextVerb(t.ext), map[string]string{"": msg.VerbExtractHere, "Icon": exe}); err != nil {
+			return err
+		}
+		if err := setValues(contextVerb(t.ext)+`\command`, map[string]string{"": cmd}); err != nil {
+			return err
+		}
+		assoc[t.ext] = progID(t.ext)
+		supported[t.ext] = ""
 	}
 
-	// Offer it in "Open with" and in Default apps.
-	if err := setValues(classes+`\.zip\OpenWithProgids`, map[string]string{progID: ""}); err != nil {
-		return err
-	}
 	if err := setValues(applicationKy, map[string]string{"FriendlyAppName": appName}); err != nil {
 		return err
 	}
-	if err := setValues(applicationKy+`\SupportedTypes`, map[string]string{".zip": ""}); err != nil {
+	if err := setValues(applicationKy+`\SupportedTypes`, supported); err != nil {
 		return err
 	}
 	if err := setValues(applicationKy+`\shell\open\command`, map[string]string{"": cmd}); err != nil {
@@ -208,18 +247,10 @@ func register(exe string) error {
 	}); err != nil {
 		return err
 	}
-	if err := setValues(capabilities+`\FileAssociations`, map[string]string{".zip": progID}); err != nil {
+	if err := setValues(capabilities+`\FileAssociations`, assoc); err != nil {
 		return err
 	}
 	if err := setValues(`Software\RegisteredApplications`, map[string]string{appName: capabilities}); err != nil {
-		return err
-	}
-
-	// A context-menu verb on every .zip, whatever the default is.
-	if err := setValues(contextVerb, map[string]string{"": msg.VerbExtractHere, "Icon": exe}); err != nil {
-		return err
-	}
-	if err := setValues(contextVerb+`\command`, map[string]string{"": cmd}); err != nil {
 		return err
 	}
 
@@ -239,12 +270,16 @@ func register(exe string) error {
 
 func uninstall() error {
 	var errs []error
-	for _, k := range []string{classes + `\` + progID, applicationKy, contextVerb, `Software\` + appName, uninstallKey} {
+	keys := []string{applicationKy, `Software\` + appName, uninstallKey}
+	for _, t := range fileTypes {
+		keys = append(keys, classes+`\`+progID(t.ext), contextVerb(t.ext))
+		deleteValue(classes+`\`+t.ext+`\OpenWithProgids`, progID(t.ext))
+	}
+	for _, k := range keys {
 		if err := deleteTree(registry.CURRENT_USER, k); err != nil {
 			errs = append(errs, err)
 		}
 	}
-	deleteValue(classes+`\.zip\OpenWithProgids`, progID)
 	deleteValue(`Software\RegisteredApplications`, appName)
 	procSHChangeNoti.Call(shcneAssocChanged, shcnfIDList, 0, 0)
 
@@ -274,7 +309,7 @@ func status() error {
 	exe := filepath.Join(installDir(), exeName)
 	_, err := os.Stat(exe)
 	fmt.Printf("installed:  %v (%s)\n", err == nil, exe)
-	k, err := registry.OpenKey(registry.CURRENT_USER, classes+`\`+progID+`\shell\open\command`, registry.QUERY_VALUE)
+	k, err := registry.OpenKey(registry.CURRENT_USER, classes+`\`+progID(".zip")+`\shell\open\command`, registry.QUERY_VALUE)
 	if err == nil {
 		v, _, _ := k.GetStringValue("")
 		k.Close()
@@ -282,21 +317,26 @@ func status() error {
 	} else {
 		fmt.Println("registered: no")
 	}
-	cur := currentProgID()
-	if cur == "" {
-		cur = "(Windows default: CompressedFolder)"
+	fmt.Println("double-clicks:")
+	for _, t := range fileTypes {
+		cur := currentProgID(t.ext)
+		switch {
+		case cur == progID(t.ext):
+			cur = "ZipClick"
+		case cur == "":
+			cur = "Windows default"
+		}
+		fmt.Printf("  %-6s %s\n", t.ext, cur)
 	}
-	fmt.Printf("default:    %s\n", cur)
-	fmt.Printf("active:     %v\n", cur == progID)
 	return nil
 }
 
-// currentProgID is what a .zip double-click resolves to for this user.
+// currentProgID is what a double-click on ext resolves to for this user.
 // Windows 11 25H2 keeps the choice in UserChoiceLatest\ProgId and leaves the
 // older UserChoice key behind with a stale value, so the newer one wins.
-func currentProgID() string {
+func currentProgID(ext string) string {
 	for _, sub := range []string{`UserChoiceLatest\ProgId`, "UserChoice"} {
-		k, err := registry.OpenKey(registry.CURRENT_USER, userChoice+sub, registry.QUERY_VALUE)
+		k, err := registry.OpenKey(registry.CURRENT_USER, fileExts+ext+`\`+sub, registry.QUERY_VALUE)
 		if err != nil {
 			continue
 		}

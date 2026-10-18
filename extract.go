@@ -1,7 +1,6 @@
 package main
 
 import (
-	"archive/zip"
 	"errors"
 	"fmt"
 	"io"
@@ -18,17 +17,25 @@ import (
 	"golang.org/x/text/unicode/norm"
 )
 
-// ErrEncrypted is returned for password-protected archives, which archive/zip
-// cannot read.
+// ErrEncrypted is returned when the archive needs a password and none was
+// given.
 var ErrEncrypted = errors.New("the archive is password-protected")
+
+// ErrBadPassword is returned when the password given does not open the
+// archive.
+var ErrBadPassword = errors.New("the password is not correct")
 
 // ErrEmpty is returned for an archive with nothing to extract.
 var ErrEmpty = errors.New("the archive is empty")
 
+// ErrUnknownFormat is returned for a file that is not an archive ZipClick
+// reads.
+var ErrUnknownFormat = errors.New("not an archive ZipClick can read")
+
 // ErrCancelled is returned when Progress.Cancel stopped an extraction.
 var ErrCancelled = errors.New("cancelled")
 
-// MethodError is returned for a member compressed with a method archive/zip
+// MethodError is returned for a zip member compressed with a method ZipClick
 // cannot read (Deflate64, which Explorer uses for very large files, say).
 type MethodError struct{ Method uint16 }
 
@@ -37,14 +44,16 @@ func (e *MethodError) Error() string {
 }
 
 // Progress is shared between an extraction and whoever watches it: the
-// extraction fills in Total and advances Done, the watcher may Cancel. All
-// methods are safe from any goroutine, and a nil *Progress does nothing.
+// extraction sets the total and advances what is done, the watcher may
+// Cancel. All methods are safe from any goroutine, and a nil *Progress does
+// nothing. Formats that list their contents up front count the bytes written;
+// streams (tar.gz, a lone .xz) count the bytes of the archive read instead.
 type Progress struct {
 	total, done atomic.Int64
 	cancelled   atomic.Bool
 }
 
-// Bytes returns how many uncompressed bytes are written so far, of how many.
+// Bytes returns how much is done so far, of how much.
 func (p *Progress) Bytes() (done, total int64) {
 	return p.done.Load(), p.total.Load()
 }
@@ -55,40 +64,57 @@ func (p *Progress) Cancel() { p.cancelled.Store(true) }
 
 func (p *Progress) stopped() bool { return p != nil && p.cancelled.Load() }
 
+func (p *Progress) setTotal(n int64) {
+	if p != nil {
+		p.total.Store(n)
+	}
+}
+
 func (p *Progress) add(n int64) {
 	if p != nil {
 		p.done.Add(n)
 	}
 }
 
-// entry is one archive member, already mapped to a safe relative path.
-type entry struct {
-	file *zip.File
-	rel  string // slash-separated, sanitized, never escapes the destination
-	dir  bool
+// A source walks the members of one archive, in order. Each format has one.
+type source interface {
+	// next returns the next member, or io.EOF after the last. A member's
+	// contents can only be read before the following call to next.
+	next() (*member, error)
+	// countsInput says the source advances Progress itself, by the bytes of
+	// archive it reads, instead of by the bytes extracted.
+	countsInput() bool
+	Close() error
+}
+
+// member is one entry of an archive, as its format describes it.
+type member struct {
+	name     string // UTF-8, '/' or '\' separated, not yet made safe
+	dir      bool
+	skip     bool   // symbolic links and devices, which are never extracted
+	hardlink string // tar: the earlier member this one has the contents of
+	exec     bool
+	mtime    time.Time // zero when unknown
+	open     func() (io.ReadCloser, error)
 }
 
 // Extract unpacks archive next to itself the way macOS Archive Utility does:
 // an archive holding a single top-level item yields that item beside the
 // archive; anything else yields a folder named after the archive. Existing
-// names are never overwritten — "name 2", "name 3"... are used instead.
+// names are never overwritten: "name 2", "name 3"... are used instead.
 //
 // Everything is written into a hidden staging folder in the same directory
 // first and renamed into place at the end, so a failed or interrupted
 // extraction never leaves a half-written result under the final name.
 //
-// It returns the path of the item created. p may be nil.
-func Extract(archive string, p *Progress) (string, error) {
-	r, err := zip.OpenReader(archive)
+// It returns the path of the item created. password may be empty; an
+// encrypted archive then fails with ErrEncrypted. p may be nil.
+func Extract(archive, password string, p *Progress) (string, error) {
+	src, err := openArchive(archive, password, p)
 	if err != nil {
 		return "", err
 	}
-	defer r.Close()
-
-	entries, err := plan(r.File, oemDecoder())
-	if err != nil {
-		return "", err
-	}
+	defer src.Close()
 
 	parent := filepath.Dir(archive)
 	stage, err := os.MkdirTemp(parent, ".zipclick-")
@@ -98,22 +124,17 @@ func Extract(archive string, p *Progress) (string, error) {
 	hide(stage)
 	defer os.RemoveAll(stage) // no-op once renamed away
 
-	if p != nil {
-		var total int64
-		for _, e := range entries {
-			if !e.dir {
-				total += int64(e.file.UncompressedSize64)
-			}
-		}
-		p.total.Store(total)
-	}
-	if err := writeAll(stage, entries, p); err != nil {
+	tops, err := writeAll(stage, src, p)
+	if err != nil {
 		return "", err
 	}
+	if len(tops) == 0 {
+		return "", ErrEmpty
+	}
 
-	if top, ok := singleTop(entries); ok {
-		dst := uniquePath(parent, top)
-		if err := os.Rename(filepath.Join(stage, top), dst); err != nil {
+	if len(tops) == 1 {
+		dst := uniquePath(parent, tops[0])
+		if err := os.Rename(filepath.Join(stage, tops[0]), dst); err != nil {
 			return "", err
 		}
 		return dst, nil
@@ -127,37 +148,11 @@ func Extract(archive string, p *Progress) (string, error) {
 	return dst, nil
 }
 
-// plan decodes and sanitizes every member name, drops macOS metadata, and
-// refuses archives it cannot extract faithfully.
-func plan(files []*zip.File, oem *charmap.Charmap) ([]entry, error) {
-	var out []entry
-	for _, f := range files {
-		if f.Flags&0x1 != 0 {
-			return nil, ErrEncrypted
-		}
-		name := decodeName(f, oem)
-		rel, ok := safeRel(name)
-		if !ok || isMacJunk(rel) {
-			continue
-		}
-		mode := f.Mode()
-		if mode&os.ModeSymlink != 0 {
-			continue // a link pointing outside the destination is not worth the risk
-		}
-		out = append(out, entry{file: f, rel: rel, dir: mode.IsDir() || strings.HasSuffix(name, "/")})
-	}
-	if len(out) == 0 {
-		return nil, ErrEmpty
-	}
-	return out, nil
-}
-
 // decodeName returns the member name as UTF-8. Zips written by older Windows
 // (and many other tools) store names in the OEM code page without saying so;
 // zips from macOS store UTF-8 without the flag, decomposed (NFD).
-func decodeName(f *zip.File, oem *charmap.Charmap) string {
-	name := f.Name
-	if f.NonUTF8 && !utf8.ValidString(name) {
+func decodeName(name string, nonUTF8 bool, oem *charmap.Charmap) string {
+	if nonUTF8 && !utf8.ValidString(name) {
 		if s, err := oem.NewDecoder().String(name); err == nil {
 			name = s
 		}
@@ -228,23 +223,14 @@ func isMacJunk(rel string) bool {
 	return first == "__MACOSX" || base == ".DS_Store"
 }
 
-// singleTop returns the only top-level name when the archive has exactly one.
-func singleTop(entries []entry) (string, bool) {
-	var top string
-	for _, e := range entries {
-		first, _, _ := strings.Cut(e.rel, "/")
-		if top == "" {
-			top = first
-		} else if !strings.EqualFold(top, first) {
-			return "", false
-		}
-	}
-	return top, true
-}
-
+// archiveStem is the archive's name without its extension, or both of them
+// for "name.tar.gz".
 func archiveStem(archive string) string {
 	base := filepath.Base(archive)
 	stem := strings.TrimSuffix(base, filepath.Ext(base))
+	if strings.EqualFold(filepath.Ext(stem), ".tar") {
+		stem = strings.TrimSuffix(stem, filepath.Ext(stem))
+	}
 	if stem == "" {
 		stem = base
 	}
@@ -271,28 +257,60 @@ func uniquePath(dir, name string) string {
 	}
 }
 
-func writeAll(root string, entries []entry, p *Progress) error {
+// writeAll extracts every member of src under root and returns the
+// top-level names it created, in order, without macOS metadata or anything
+// unsafe.
+func writeAll(root string, src source, p *Progress) ([]string, error) {
+	var tops []string
+	seen := map[string]bool{}
 	dirTimes := map[string]time.Time{}
-	for _, e := range entries {
+	countOutput := !src.countsInput()
+	for {
 		if p.stopped() {
-			return ErrCancelled
+			return nil, ErrCancelled
 		}
-		dst := filepath.Join(root, filepath.FromSlash(e.rel))
-		if e.dir {
+		m, err := src.next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		rel, ok := safeRel(m.name)
+		if !ok || m.skip || isMacJunk(rel) {
+			continue
+		}
+		first, _, _ := strings.Cut(rel, "/")
+		if k := strings.ToLower(first); !seen[k] {
+			seen[k] = true
+			tops = append(tops, first)
+		}
+		dst := filepath.Join(root, filepath.FromSlash(rel))
+		if m.dir || strings.HasSuffix(m.name, "/") {
 			if err := os.MkdirAll(dst, 0o755); err != nil {
-				return err
+				return nil, err
 			}
-			dirTimes[dst] = modTime(e.file)
+			dirTimes[dst] = m.mtime
 			continue
 		}
 		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-			return err
+			return nil, err
 		}
-		if err := writeFile(dst, e.file, p); err != nil {
-			if errors.Is(err, ErrCancelled) {
-				return err
+		if m.hardlink != "" {
+			if target, ok := safeRel(m.hardlink); ok {
+				_ = linkOrCopy(filepath.Join(root, filepath.FromSlash(target)), dst)
 			}
-			return fmt.Errorf("%s: %w", e.rel, err)
+			continue
+		}
+		var pw *Progress
+		if countOutput {
+			pw = p
+		}
+		if err := writeFile(dst, m, p, pw); err != nil {
+			if errors.Is(err, ErrCancelled) || errors.Is(err, ErrBadPassword) || errors.Is(err, ErrEncrypted) {
+				return nil, err
+			}
+			return nil, fmt.Errorf("%s: %w", rel, err)
 		}
 	}
 	// Directory times last, deepest first: writing into a directory bumps it.
@@ -306,66 +324,58 @@ func writeAll(root string, entries []entry, p *Progress) error {
 			_ = os.Chtimes(d, t, t)
 		}
 	}
-	return nil
+	return tops, nil
 }
 
-func writeFile(dst string, f *zip.File, p *Progress) error {
-	rc, err := f.Open()
+// writeFile writes one member to dst. cancel is checked on every buffer;
+// count, when not nil, is advanced by the bytes written.
+func writeFile(dst string, m *member, cancel, count *Progress) error {
+	rc, err := m.open()
 	if err != nil {
-		if errors.Is(err, zip.ErrAlgorithm) {
-			return &MethodError{f.Method}
-		}
 		return err
 	}
 	defer rc.Close()
 
 	perm := os.FileMode(0o644)
-	if f.Mode().Perm()&0o100 != 0 {
+	if m.exec {
 		perm = 0o755
 	}
 	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm)
 	if err != nil {
 		return err
 	}
-	if _, err := io.CopyBuffer(&progressWriter{out, p}, rc, make([]byte, 256<<10)); err != nil {
+	if _, err := io.CopyBuffer(&progressWriter{out, cancel, count}, rc, make([]byte, 256<<10)); err != nil {
 		out.Close()
 		return err
 	}
 	if err := out.Close(); err != nil {
 		return err
 	}
-	if t := modTime(f); !t.IsZero() {
-		_ = os.Chtimes(dst, t, t)
+	if !m.mtime.IsZero() {
+		_ = os.Chtimes(dst, m.mtime, m.mtime)
 	}
 	return nil
 }
 
-// modTime is when the member was last modified. A zip that carries only the
-// MS-DOS date fields (Explorer's do) records local wall-clock time, which
-// archive/zip labels UTC; read it as local time instead.
-func modTime(f *zip.File) time.Time {
-	t := f.Modified
-	if t.IsZero() || hasExtendedTime(f.Extra) {
-		return t
+// linkOrCopy gives dst the contents of the already extracted src.
+func linkOrCopy(src, dst string) error {
+	if os.Link(src, dst) == nil {
+		return nil
 	}
-	return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second(), 0, time.Local)
-}
-
-// hasExtendedTime reports an NTFS (0x000a) or Unix extended (0x5455)
-// timestamp field, both of which are true instants.
-func hasExtendedTime(extra []byte) bool {
-	for len(extra) >= 4 {
-		tag := uint16(extra[0]) | uint16(extra[1])<<8
-		size := int(uint16(extra[2]) | uint16(extra[3])<<8)
-		if tag == 0x000a || tag == 0x5455 {
-			return true
-		}
-		if 4+size > len(extra) {
-			break
-		}
-		extra = extra[4+size:]
+	in, err := os.Open(src)
+	if err != nil {
+		return err
 	}
-	return false
+	defer in.Close()
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		out.Close()
+		return err
+	}
+	return out.Close()
 }
 
 // codePages maps the OEM code pages Windows may report to their decoders.
@@ -392,15 +402,29 @@ func oemDecoder() *charmap.Charmap {
 // progressWriter counts what passes through it and fails once cancelled, which
 // stops io.Copy within one buffer of the request.
 type progressWriter struct {
-	w io.Writer
-	p *Progress
+	w      io.Writer
+	cancel *Progress
+	count  *Progress
 }
 
 func (pw *progressWriter) Write(b []byte) (int, error) {
-	if pw.p.stopped() {
+	if pw.cancel.stopped() {
 		return 0, ErrCancelled
 	}
 	n, err := pw.w.Write(b)
-	pw.p.add(int64(n))
+	pw.count.add(int64(n))
+	return n, err
+}
+
+// progressReader advances p by what is read through it: the archive itself,
+// for sources that count input.
+type progressReader struct {
+	r io.Reader
+	p *Progress
+}
+
+func (pr *progressReader) Read(b []byte) (int, error) {
+	n, err := pr.r.Read(b)
+	pr.p.add(int64(n))
 	return n, err
 }

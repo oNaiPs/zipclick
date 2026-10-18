@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ZipClick: double-click a zip on Windows to extract it</title>
-<meta name="description" content="A small free program that makes double-clicking a .zip file on Windows extract it next to the zip, the way it works on a Mac.">
+<title>ZipClick: double-click a zip or rar on Windows to extract it</title>
+<meta name="description" content="A small free program that makes double-clicking a .zip, .rar, .7z or .tar.gz file on Windows extract it next to itself, the way it works on a Mac.">
 <link rel="icon" href="img/favicon-32.png">
 <style>
   :root {
@@ -79,17 +79,18 @@
 <p class="lede">Double-click a zip file on Windows and get the files, like on a Mac.</p>
 
 <p>Normally, double-clicking a zip on Windows opens it as if it were a folder. To actually get the files out you have to right-click, choose Extract All, confirm where they should go, and then close the extra window that pops up. ZipClick replaces all of that with the double-click: the files appear right next to the zip.</p>
+<p>It does the same for .rar, .7z and .tar.gz files, and asks for the password when there is one.</p>
 
 <div class="download">
   <a class="button" href="https://github.com/oNaiPs/zipclick/releases/latest/download/ZipClick.exe">Download ZipClick for Windows 10 and 11</a>
 </div>
-<p class="small">Version 0.3.1, 2.7 MB, free. Got a Snapdragon (ARM) laptop? Use the <a href="https://github.com/oNaiPs/zipclick/releases/latest/download/ZipClick-arm64.exe">ARM64 version</a> instead.</p>
+<p class="small">Version 0.4.0, 7.3 MB, free. Got a Snapdragon (ARM) laptop? Use the <a href="https://github.com/oNaiPs/zipclick/releases/latest/download/ZipClick-arm64.exe">ARM64 version</a> instead.</p>
 
 <video src="demo.mp4" poster="img/demo-poster.png" autoplay muted loop playsinline aria-label="Double-clicking three zip files in Explorer. Each one is extracted next to itself and selected. The large one shows a progress window first."></video>
 <p class="small">Three double-clicks. The last zip is 1.2 GB, so a progress window shows up for a few seconds.</p>
 
 <h2>What happens when you double-click a zip</h2>
-<p>If the zip contains one folder or one file, that's what you get, sitting next to the zip. If it contains a bunch of loose files, they go into a new folder with the zip's name, so they don't spill all over your Downloads.</p>
+<p>If the zip contains one folder or one file, that's what you get, sitting next to the zip. If it contains a bunch of loose files, they go into a new folder with the zip's name, so they don't spill all over your Downloads. A .rar or .7z works the same way.</p>
 <p>ZipClick never replaces anything you already have. If there's already a folder called "Photos", the new one is called "Photos 2".</p>
 <p>When it's done, the new folder is selected in the window you were looking at, so you can open it straight away. Large zips get a small progress window, and Cancel really does cancel: nothing half-extracted is left lying around.</p>
 <img class="shot" src="img/progress.png" width="421" height="139" alt="The ZipClick progress window: Extracting Big dataset.zip, 606.5 MB of 1.2 GB, with a Cancel button.">
@@ -101,15 +102,15 @@
   <li>ZipClick asks if you want zip files to work this way. Click <b>Yes</b>.
     <img class="shot" src="img/install-prompt.png" width="397" height="171" alt="ZipClick asks: Make double-clicking a .zip file extract it, like on a Mac? With Yes and No buttons.">
   </li>
-  <li>Windows Settings opens on ZipClick's page. Click the box under <b>.zip</b>, choose <b>ZipClick</b>, then <b>Set default</b>. Windows insists that you make this choice yourself; programs aren't allowed to do it for you.
+  <li>Windows Settings opens on ZipClick's page. Click the box under <b>.zip</b>, choose <b>ZipClick</b>, then <b>Set default</b>. Windows insists that you make this choice yourself; programs aren't allowed to do it for you. The other types, like .rar and .7z, are on the same page. If you skip them, Windows asks the first time you open one: pick ZipClick, then <b>Always</b>.
     <img class="shot" src="img/default-app.png" width="446" height="258" alt="The Windows Settings dialog 'Select a default app for .zip files', with ZipClick selected.">
   </li>
 </ol>
 <p>That's it. You don't need to be an administrator, and you don't need to restart anything.</p>
 
-<h2>When a zip can't be extracted</h2>
-<p>Some zips are protected with a password, and some very large ones use a compression method ZipClick doesn't read. In those cases it tells you, and points you to Windows' own Extract All, which handles both.</p>
-<img class="shot" src="img/error.png" width="379" height="197" alt="ZipClick message: Could not extract Password protected.zip. The archive is password-protected. Right-click the file, Extract All, to use Windows' own extractor instead.">
+<h2>Archives with a password</h2>
+<p>When a zip, .rar or .7z is protected with a password, ZipClick asks for it. Type it and press Enter. If it's wrong, it says so and lets you try again.</p>
+<img class="shot" src="img/password.png" width="382" height="182" alt="ZipClick asks: Secret album.rar is protected with a password. Enter the password to extract it. With a password field, OK and Cancel.">
 
 <h2>Questions</h2>
 <dl>
@@ -117,10 +118,10 @@
   <dd>Yes. Right-click it, choose Open with, then File Explorer.</dd>
 
   <dt>Does it work with .rar or .7z files?</dt>
-  <dd>No, only .zip.</dd>
+  <dd>Yes, and with .tar, .tar.gz, .tgz, .tar.bz2, .tar.xz and .tar.zst too. You don't need 7-Zip or WinRAR. Very large .7z and .rar files take a few times longer than they would in 7-Zip, so a 1 GB .7z is about 20 seconds instead of 6.</dd>
 
   <dt>Does it connect to the internet or collect anything?</dt>
-  <dd>No. It has no network code at all. When it extracts, it only writes inside the folder where your zip is. You can read the <a href="https://github.com/oNaiPs/zipclick">source code</a> if you want to check.</dd>
+  <dd>No. It has no network code at all. When it extracts, it only writes inside the folder where your archive is. You can read the <a href="https://github.com/oNaiPs/zipclick">source code</a> if you want to check.</dd>
 
   <dt>What languages does it speak?</dt>
   <dd>English, Portuguese (Portugal and Brazil), Spanish, French, German and Italian. It follows your Windows display language.</dd>

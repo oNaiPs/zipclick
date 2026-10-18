@@ -82,6 +82,8 @@ I test releases on Windows 11 25H2 (x64), clicking through the install, the Sett
 
 The formats come from [bodgit/sevenzip](https://github.com/bodgit/sevenzip), [nwaples/rardecode](https://github.com/nwaples/rardecode), [klauspost/compress](https://github.com/klauspost/compress) and [ulikunitz/xz](https://github.com/ulikunitz/xz). The Deflate64 decoder is Go's own inflate with Deflate64's three changes, in `internal/deflate64`.
 
+ZipClick is built with the help of AI coding agents (LLMs). I review the changes and test each release myself.
+
 ## License
 
 MIT. See [LICENSE](LICENSE).

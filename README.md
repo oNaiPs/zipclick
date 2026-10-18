@@ -3,6 +3,8 @@
 Double-click a `.zip` on Windows and it is extracted — the way Archive Utility
 does it on macOS — instead of being opened as a folder.
 
+![Double-clicking zips in Explorer: each one is extracted next to itself and selected; a large one shows a progress window](docs/demo.gif)
+
 - **One item inside** (a folder or a file) → that item appears next to the zip.
 - **Several items** → a folder named after the zip, next to it.
 - **Never overwrites**: `name 2`, `name 3`… if the name is taken.

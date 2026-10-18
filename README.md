@@ -55,6 +55,8 @@ Set `ZIPCLICK_LANG` (for example `pt-PT`) to force a language.
 
 ## Code signing policy
 
+Status: pending. ZipClick has applied to the SignPath Foundation's free code signing program; until it is approved, releases are not signed.
+
 Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).
 
 Committers and reviewers: [Jose Pereira](https://github.com/oNaiPs). Approvers: [Jose Pereira](https://github.com/oNaiPs).

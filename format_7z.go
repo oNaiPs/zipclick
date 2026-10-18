@@ -41,6 +41,7 @@ func (s *sevenZipSource) next() (*member, error) {
 		dir:   mode.IsDir(),
 		skip:  mode&(os.ModeSymlink|os.ModeDevice|os.ModeNamedPipe|os.ModeSocket) != 0,
 		exec:  mode.Perm()&0o100 != 0,
+		size:  int64(f.UncompressedSize),
 		mtime: f.Modified,
 		open: func() (io.ReadCloser, error) {
 			rc, err := f.Open()

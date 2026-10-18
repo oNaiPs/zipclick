@@ -5,6 +5,9 @@ name: Release
 # published until the signing request is approved in SignPath and the draft
 # is published by hand.
 #
+# Actions are pinned to commits, not tags: this job can write releases, and
+# a moved tag would run someone else's code with that permission.
+#
 # Signing runs once the repository variable SIGNPATH_ORGANIZATION_ID and the
 # secret SIGNPATH_API_TOKEN exist; before that the draft gets unsigned files.
 
@@ -21,19 +24,16 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: go.mod
 
-      - name: Test
-        run: |
-          go vet ./...
-          GOOS=windows go vet ./...
-          go test ./...
+      - name: Check
+        run: ./check.sh
 
       - name: Build
         run: |
@@ -44,14 +44,14 @@ jobs:
 
       - name: Upload for signing
         id: unsigned
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: zipclick-unsigned
           path: out/
 
       - name: Sign
         if: vars.SIGNPATH_ORGANIZATION_ID != ''
-        uses: signpath/github-action-submit-signing-request@v1
+        uses: signpath/github-action-submit-signing-request@ced31329c0317e779dad2eec2a7c3bb46ea1343e # v1
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
           organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}

@@ -66,6 +66,7 @@ func (s *zipSource) next() (*member, error) {
 		dir:   mode.IsDir(),
 		skip:  mode&os.ModeSymlink != 0, // a link pointing outside the destination is not worth the risk
 		exec:  mode.Perm()&0o100 != 0,
+		size:  int64(f.UncompressedSize64),
 		mtime: modTime(f),
 		open:  func() (io.ReadCloser, error) { return openZipFile(f, s.password, s.oem) },
 	}, nil
@@ -97,6 +98,9 @@ var zipMethods = map[uint16]func(r io.Reader, f *zip.File) (io.ReadCloser, error
 }
 
 const methodAES = 99
+
+// maxLZMADict bounds the LZMA dictionary a zip member may ask for.
+const maxLZMADict = 256 << 20
 
 func openZipFile(f *zip.File, password string, oem *charmap.Charmap) (io.ReadCloser, error) {
 	encrypted := f.Flags&0x1 != 0
@@ -194,7 +198,10 @@ func openZipLZMA(r io.Reader, f *zip.File) (io.ReadCloser, error) {
 		size = ^uint64(0)
 	}
 	binary.LittleEndian.PutUint64(lz[5:], size)
-	lr, err := lzma.NewReader(io.MultiReader(bytes.NewReader(lz[:]), r))
+	// The dictionary is allocated up front at the size the header asks for,
+	// up to 2 GiB; zips never use more than 64 MiB, so a bigger one is a
+	// crafted header, not an archive.
+	lr, err := lzma.ReaderConfig{DictCap: maxLZMADict}.NewReader(io.MultiReader(bytes.NewReader(lz[:]), r))
 	return io.NopCloser(lr), err
 }
 

@@ -32,6 +32,14 @@ var ErrEmpty = errors.New("the archive is empty")
 // reads.
 var ErrUnknownFormat = errors.New("not an archive ZipClick can read")
 
+// ErrDiskFull is returned when extracting would leave less than diskReserve
+// free on the destination's drive.
+var ErrDiskFull = errors.New("not enough free disk space")
+
+// errTooLong is returned for a member that holds more data than its header
+// says, which no honest archive does.
+var errTooLong = errors.New("a file in the archive is larger than it declares")
+
 // ErrCancelled is returned when Progress.Cancel stopped an extraction.
 var ErrCancelled = errors.New("cancelled")
 
@@ -94,6 +102,7 @@ type member struct {
 	skip     bool   // symbolic links and devices, which are never extracted
 	hardlink string // tar: the earlier member this one has the contents of
 	exec     bool
+	size     int64     // what the header declares; -1 when unknown
 	mtime    time.Time // zero when unknown
 	open     func() (io.ReadCloser, error)
 }
@@ -109,7 +118,14 @@ type member struct {
 //
 // It returns the path of the item created. password may be empty; an
 // encrypted archive then fails with ErrEncrypted. p may be nil.
-func Extract(archive, password string, p *Progress) (string, error) {
+func Extract(archive, password string, p *Progress) (dst string, err error) {
+	// The format libraries read attacker-controlled headers and some can
+	// still panic on a crafted one; that is a damaged archive, not a crash.
+	defer func() {
+		if r := recover(); r != nil {
+			dst, err = "", fmt.Errorf("%w: %v", errDamaged, r)
+		}
+	}()
 	src, err := openArchive(archive, password, p)
 	if err != nil {
 		return "", err
@@ -122,7 +138,7 @@ func Extract(archive, password string, p *Progress) (string, error) {
 		return "", err
 	}
 	hide(stage)
-	defer os.RemoveAll(stage) // no-op once renamed away
+	defer removeStage(stage) // no-op once renamed away
 
 	tops, err := writeAll(stage, src, p)
 	if err != nil {
@@ -133,19 +149,65 @@ func Extract(archive, password string, p *Progress) (string, error) {
 	}
 
 	if len(tops) == 1 {
-		dst := uniquePath(parent, tops[0])
-		if err := os.Rename(filepath.Join(stage, tops[0]), dst); err != nil {
+		return moveUnique(filepath.Join(stage, tops[0]), parent, tops[0])
+	}
+	if dst, err = moveUnique(stage, parent, archiveStem(archive)); err == nil {
+		unhide(dst)
+	}
+	return dst, err
+}
+
+// errDamaged wraps what a format library panicked with.
+var errDamaged = errors.New("the archive is damaged")
+
+// moveUnique renames from to dir/name, or "name 2", "name 3"... when that is
+// taken, never replacing anything: if a name is claimed between choosing it
+// and the rename, the next one is tried.
+func moveUnique(from, dir, name string) (string, error) {
+	for range 100 {
+		dst := uniquePath(dir, name)
+		err := renameNoReplace(from, dst)
+		if err == nil {
+			return dst, nil
+		}
+		if !errors.Is(err, os.ErrExist) {
 			return "", err
 		}
-		return dst, nil
 	}
+	return "", fmt.Errorf("no free name for %s in %s", name, dir)
+}
 
-	dst := uniquePath(parent, archiveStem(archive))
-	if err := os.Rename(stage, dst); err != nil {
-		return "", err
+// removeStage deletes the staging folder. A virus scanner can hold a file
+// just written open for a moment, so a failure is retried before giving up.
+func removeStage(stage string) {
+	for i := 0; i < 10; i++ {
+		if err := os.RemoveAll(stage); err == nil {
+			return
+		}
+		time.Sleep(200 * time.Millisecond)
 	}
-	unhide(dst)
-	return dst, nil
+}
+
+// diskReserve is how much free space extracting always leaves on the drive,
+// so a decompression bomb (a few KB that claims, or produces, gigabytes)
+// stops with an error instead of filling the disk.
+const diskReserve = 1 << 30
+
+// checkInterval is how many bytes are written between free-space checks.
+const checkInterval = 64 << 20
+
+// diskFree reports the free bytes on the drive holding dir; ok is false when
+// it cannot tell, and then nothing is refused. A variable for the tests.
+var diskFree = freeSpace
+
+// roomFor fails with ErrDiskFull when writing n more bytes under dir would
+// leave less than diskReserve free.
+func roomFor(dir string, n int64) error {
+	free, ok := diskFree(dir)
+	if ok && (free < diskReserve || uint64(n) > free-diskReserve) {
+		return ErrDiskFull
+	}
+	return nil
 }
 
 // decodeName returns the member name as UTF-8. Zips written by older Windows
@@ -190,6 +252,8 @@ var reserved = map[string]bool{
 	"COM6": true, "COM7": true, "COM8": true, "COM9": true,
 	"LPT1": true, "LPT2": true, "LPT3": true, "LPT4": true, "LPT5": true,
 	"LPT6": true, "LPT7": true, "LPT8": true, "LPT9": true,
+	// Windows also treats the superscript digits as device numbers.
+	"COM¹": true, "COM²": true, "COM³": true, "LPT¹": true, "LPT²": true, "LPT³": true,
 }
 
 // sanitizeComponent makes one path component legal on Windows: forbidden
@@ -306,8 +370,13 @@ func writeAll(root string, src source, p *Progress) ([]string, error) {
 		if countOutput {
 			pw = p
 		}
+		if m.size > 0 {
+			if err := roomFor(root, m.size); err != nil {
+				return nil, err
+			}
+		}
 		if err := writeFile(dst, m, p, pw); err != nil {
-			if errors.Is(err, ErrCancelled) || errors.Is(err, ErrBadPassword) || errors.Is(err, ErrEncrypted) {
+			if errors.Is(err, ErrCancelled) || errors.Is(err, ErrBadPassword) || errors.Is(err, ErrEncrypted) || errors.Is(err, ErrDiskFull) {
 				return nil, err
 			}
 			return nil, fmt.Errorf("%s: %w", rel, err)
@@ -344,7 +413,16 @@ func writeFile(dst string, m *member, cancel, count *Progress) error {
 	if err != nil {
 		return err
 	}
-	if _, err := io.CopyBuffer(&progressWriter{out, cancel, count}, rc, make([]byte, 256<<10)); err != nil {
+	var r io.Reader = rc
+	if m.size >= 0 {
+		r = io.LimitReader(rc, m.size+1)
+	}
+	w := &progressWriter{w: out, cancel: cancel, count: count, dir: filepath.Dir(dst)}
+	n, err := io.CopyBuffer(w, r, make([]byte, 256<<10))
+	if err == nil && m.size >= 0 && n > m.size {
+		err = errTooLong
+	}
+	if err != nil {
 		out.Close()
 		return err
 	}
@@ -405,11 +483,19 @@ type progressWriter struct {
 	w      io.Writer
 	cancel *Progress
 	count  *Progress
+	dir    string // checked for free space every checkInterval bytes
+	since  int64
 }
 
 func (pw *progressWriter) Write(b []byte) (int, error) {
 	if pw.cancel.stopped() {
 		return 0, ErrCancelled
+	}
+	if pw.since += int64(len(b)); pw.since >= checkInterval {
+		pw.since = 0
+		if err := roomFor(pw.dir, 0); err != nil {
+			return 0, err
+		}
 	}
 	n, err := pw.w.Write(b)
 	pw.count.add(int64(n))

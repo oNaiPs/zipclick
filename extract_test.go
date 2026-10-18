@@ -179,6 +179,7 @@ func TestWindowsIllegalNamesAreMadeLegal(t *testing.T) {
 		"nul.tar":  "_nul.tar",
 		"trail. ":  "trail",
 		"...":      "_",
+		"COM¹.txt": "_COM¹.txt",
 		"CONSOLE":  "CONSOLE",
 	} {
 		if got := sanitizeComponent(in); got != want {
@@ -205,6 +206,7 @@ func TestDOSOnlyTimesAreLocalTime(t *testing.T) {
 	f, _ := os.Create(p)
 	w := zip.NewWriter(f)
 	// 2020-01-02 03:04:04 in MS-DOS fields only, as Explorer writes it.
+	//lint:ignore SA1019 the deprecated DOS fields are exactly what is under test
 	h := &zip.FileHeader{Name: "f.txt", ModifiedDate: (2020-1980)<<9 | 1<<5 | 2, ModifiedTime: 3<<11 | 4<<5 | 2}
 	fw, _ := w.CreateHeader(h)
 	fw.Write([]byte("x"))

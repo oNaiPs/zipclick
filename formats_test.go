@@ -28,7 +28,7 @@ func fixture(t *testing.T, name string) (dir, path string) {
 		t.Fatal(err)
 	}
 	dir = t.TempDir()
-	path = filepath.Join(dir, name)
+	path = filepath.Join(dir, filepath.Base(name))
 	if err := os.WriteFile(path, b, 0o644); err != nil {
 		t.Fatal(err)
 	}

@@ -132,7 +132,7 @@ func openStream(path string, p *Progress, dec func(io.Reader) (io.ReadCloser, er
 		return newTarSource(br, closer), nil
 	}
 	name := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
-	s := &singleSource{m: &member{name: name, open: func() (io.ReadCloser, error) { return io.NopCloser(br), nil }}, c: closer}
+	s := &singleSource{m: &member{name: name, size: -1, open: func() (io.ReadCloser, error) { return io.NopCloser(br), nil }}, c: closer}
 	if gz, ok := dc.(*gzip.Reader); ok {
 		s.m.mtime = gz.ModTime
 	}

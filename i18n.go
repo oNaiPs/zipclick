@@ -20,6 +20,7 @@ type messages struct {
 	Encrypted       string
 	BadPassword     string
 	Empty           string
+	DiskFull        string
 	Damaged         string
 	NotArchive      string
 	Method          string // %d: the compression method number
@@ -103,6 +104,7 @@ var en = messages{
 	Encrypted:       "The archive is password-protected.",
 	BadPassword:     "The password is not correct.",
 	Empty:           "The archive is empty.",
+	DiskFull:        "There isn't enough free space on the drive to extract it.",
 	Damaged:         "The archive isn't valid, or it is damaged.",
 	NotArchive:      "ZipClick doesn't recognise this kind of file.",
 	Method:          "It uses a compression method ZipClick doesn't support (%d).",
@@ -144,6 +146,7 @@ var ptPT = messages{
 	Encrypted:       "O arquivo está protegido por palavra-passe.",
 	BadPassword:     "A palavra-passe não está correta.",
 	Empty:           "O arquivo está vazio.",
+	DiskFull:        "Não há espaço livre suficiente no disco para o extrair.",
 	Damaged:         "O arquivo não é válido, ou está danificado.",
 	NotArchive:      "O ZipClick não reconhece este tipo de ficheiro.",
 	Method:          "Usa um método de compressão que o ZipClick não suporta (%d).",
@@ -185,6 +188,7 @@ var ptBR = messages{
 	Encrypted:       "O arquivo está protegido por senha.",
 	BadPassword:     "A senha não está correta.",
 	Empty:           "O arquivo está vazio.",
+	DiskFull:        "Não há espaço livre suficiente no disco para extraí-lo.",
 	Damaged:         "O arquivo não é válido, ou está corrompido.",
 	NotArchive:      "O ZipClick não reconhece este tipo de arquivo.",
 	Method:          "Ele usa um método de compactação que o ZipClick não suporta (%d).",
@@ -226,6 +230,7 @@ var es = messages{
 	Encrypted:       "El archivo está protegido con contraseña.",
 	BadPassword:     "La contraseña no es correcta.",
 	Empty:           "El archivo está vacío.",
+	DiskFull:        "No hay suficiente espacio libre en el disco para extraerlo.",
 	Damaged:         "El archivo no es válido, o está dañado.",
 	NotArchive:      "ZipClick no reconoce este tipo de archivo.",
 	Method:          "Usa un método de compresión que ZipClick no admite (%d).",
@@ -268,6 +273,7 @@ var fr = messages{
 	Encrypted:       "L’archive est protégée par un mot de passe.",
 	BadPassword:     "Le mot de passe est incorrect.",
 	Empty:           "L’archive est vide.",
+	DiskFull:        "Il n’y a pas assez d’espace libre sur le disque pour l’extraire.",
 	Damaged:         "L’archive n’est pas valide, ou elle est endommagée.",
 	NotArchive:      "ZipClick ne reconnaît pas ce type de fichier.",
 	Method:          "Elle utilise une méthode de compression que ZipClick ne prend pas en charge (%d).",
@@ -309,6 +315,7 @@ var de = messages{
 	Encrypted:       "Das Archiv ist kennwortgeschützt.",
 	BadPassword:     "Das Kennwort ist falsch.",
 	Empty:           "Das Archiv ist leer.",
+	DiskFull:        "Auf dem Laufwerk ist nicht genug Speicherplatz frei, um es zu entpacken.",
 	Damaged:         "Das Archiv ist ungültig oder beschädigt.",
 	NotArchive:      "ZipClick kennt diesen Dateityp nicht.",
 	Method:          "Sie verwendet eine Komprimierungsmethode, die ZipClick nicht unterstützt (%d).",
@@ -350,6 +357,7 @@ var it = messages{
 	Encrypted:       "L’archivio è protetto da password.",
 	BadPassword:     "La password non è corretta.",
 	Empty:           "L’archivio è vuoto.",
+	DiskFull:        "Non c’è abbastanza spazio libero sul disco per estrarlo.",
 	Damaged:         "L’archivio non è valido, oppure è danneggiato.",
 	NotArchive:      "ZipClick non riconosce questo tipo di file.",
 	Method:          "Usa un metodo di compressione che ZipClick non supporta (%d).",

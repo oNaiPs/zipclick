@@ -78,6 +78,24 @@ const (
 	shcnfFlush        = 0x1000
 )
 
+// freeSpace is how many bytes this user may still write on dir's drive.
+func freeSpace(dir string) (uint64, bool) {
+	var avail, total, totalFree uint64
+	if err := windows.GetDiskFreeSpaceEx(utf16(dir), &avail, &total, &totalFree); err != nil {
+		return 0, false
+	}
+	return avail, true
+}
+
+// renameNoReplace moves a file or folder like os.Rename, except that an
+// existing destination is an error (os.ErrExist) instead of being replaced.
+func renameNoReplace(from, to string) error {
+	if err := windows.MoveFileEx(utf16(from), utf16(to), 0); err != nil {
+		return &os.LinkError{Op: "rename", Old: from, New: to, Err: err}
+	}
+	return nil
+}
+
 func oemCodePage() uint32 {
 	cp, _, _ := procGetOEMCP.Call()
 	return uint32(cp)
@@ -289,9 +307,18 @@ func uninstall() error {
 		// CmdLine verbatim: exec.Command would escape the inner quotes as \",
 		// which cmd.exe does not understand. Leave our job object if allowed,
 		// so the cleanup outlives a parent that kills its job on exit.
-		cmdline := fmt.Sprintf(`cmd.exe /c ping -n 3 127.0.0.1 >nul & rmdir /s /q "%s"`, installDir())
+		// Both programs by full path, not through PATH. ping only waits:
+		// two seconds for this process to exit, on the loopback address.
+		// The outer quotes after /c are for cmd, which strips the first and
+		// last quote of the line when there are more than two.
+		sys32, err := windows.GetSystemDirectory()
+		if err != nil {
+			sys32 = `C:\Windows\System32`
+		}
+		cmdExe := filepath.Join(sys32, "cmd.exe")
+		cmdline := fmt.Sprintf(`"%s" /c ""%s" -n 3 127.0.0.1 >nul & rmdir /s /q "%s""`, cmdExe, filepath.Join(sys32, "PING.EXE"), installDir())
 		for _, flags := range []uint32{windows.CREATE_BREAKAWAY_FROM_JOB, 0} {
-			c := exec.Command("cmd.exe")
+			c := exec.Command(cmdExe)
 			c.SysProcAttr = &syscall.SysProcAttr{CmdLine: cmdline, HideWindow: true, CreationFlags: windows.CREATE_NO_WINDOW | flags}
 			if c.Start() == nil {
 				break

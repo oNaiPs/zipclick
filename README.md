@@ -38,6 +38,8 @@ ZipClick reads .zip (including password-protected ones, ZipCrypto or AES, and th
 
 Symbolic links inside an archive are skipped. Self-extracting .exe archives aren't handled.
 
+ZipClick always leaves 1 GB free on the drive. An archive that would need more stops with a "not enough free space" message, which is also what stops a decompression bomb, a few KB that unpack into gigabytes.
+
 You can still look inside a zip without extracting it: right-click it, then Open with > File Explorer.
 
 ## Command line
@@ -48,7 +50,7 @@ zipclick install       install for this user
 zipclick uninstall     remove
 zipclick status        show where double-clicks on each type go right now
 --quiet                no dialogs, messages go to stdout and stderr
---password=PW          the password, instead of asking for it
+--password=PW          the password, instead of asking for it (other programs you run can see it)
 ```
 
 Set `ZIPCLICK_LANG` (for example `pt-PT`) to force a language.
@@ -70,8 +72,8 @@ Privacy policy: this program will not transfer any information to other networke
 You need Go. It cross-compiles from any OS.
 
 ```
-go test ./...
-./build.sh 0.4.0    # writes dist/zipclick-amd64.exe and dist/zipclick-arm64.exe
+./check.sh          # gofmt, go vet, staticcheck, govulncheck and the tests, as CI runs them
+./build.sh 0.4.1    # writes dist/zipclick-amd64.exe and dist/zipclick-arm64.exe
 ```
 
 A release is a tag: `git tag -a v0.5.0 -m "what changed"` and `git push origin v0.5.0`. The workflow in `.github/workflows/release.yml` tests, builds, sends both executables to SignPath and drafts the GitHub release with the signed files and the tag message as notes. Approve the signing request in SignPath, check the draft, publish it.

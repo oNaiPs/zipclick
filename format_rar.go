@@ -16,8 +16,11 @@ type rarSource struct {
 }
 
 func openRar(path, password string, p *Progress) (source, error) {
+	// The dictionary is allocated at the size the header asks for, up to
+	// 4 GiB by default. RAR only goes past 1 GiB when told to (-md), so a
+	// larger one is refused rather than allocated.
+	opts := []rardecode.Option{rardecode.MaxDictionarySize(1 << 30)}
 	// An empty Password option reads as a wrong password, not as none.
-	var opts []rardecode.Option
 	if password != "" {
 		opts = append(opts, rardecode.Password(password))
 	}
@@ -53,11 +56,16 @@ func (s *rarSource) next() (*member, error) {
 		return nil, rarError(err, s.password, false)
 	}
 	s.encrypted = h.Encrypted
+	size := h.UnPackedSize
+	if h.UnKnownSize {
+		size = -1
+	}
 	return &member{
 		name:  h.Name,
 		dir:   h.IsDir,
 		skip:  h.LinkType != 0, // symbolic links, junctions and the like
 		exec:  h.Mode().Perm()&0o100 != 0,
+		size:  size,
 		mtime: h.ModificationTime,
 		open:  func() (io.ReadCloser, error) { return io.NopCloser(&rarReader{s}), nil },
 	}, nil

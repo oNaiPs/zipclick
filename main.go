@@ -124,6 +124,8 @@ func describe(err error) string {
 		return msg.BadPassword
 	case errors.Is(err, ErrUnknownFormat):
 		return msg.NotArchive
+	case errors.Is(err, ErrDiskFull):
+		return msg.DiskFull
 	case errors.Is(err, ErrEmpty):
 		return msg.Empty
 	case errors.As(err, &me):
@@ -132,6 +134,9 @@ func describe(err error) string {
 		return msg.Damaged
 	}
 	s := err.Error()
+	if s == "" {
+		return msg.Damaged
+	}
 	return strings.ToUpper(s[:1]) + s[1:]
 }
 
@@ -172,6 +177,8 @@ func ask(title, text string) bool {
 }
 
 // info tells the user something that went right; silent with --quiet.
+//
+//lint:ignore U1000 only the Windows install and uninstall have news to give
 func info(title, text string) {
 	if quiet {
 		fmt.Println(text)

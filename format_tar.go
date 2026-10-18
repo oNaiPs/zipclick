@@ -24,6 +24,7 @@ func (s *tarSource) next() (*member, error) {
 	m := &member{
 		name:  h.Name,
 		exec:  h.Mode&0o100 != 0,
+		size:  h.Size,
 		mtime: h.ModTime,
 		open:  func() (io.ReadCloser, error) { return io.NopCloser(s.r), nil },
 	}

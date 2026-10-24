@@ -9,7 +9,11 @@ $out = "$B\results.csv"
 $sz = 'C:\Program Files\7-Zip\7z.exe'
 $wr = 'C:\Program Files\WinRAR\WinRAR.exe'
 $bz = 'C:\Program Files\Bandizip\bz.exe'
-"archive,tool,run,seconds,files,bytes" | Set-Content $out
+# Defender scans every file an unknown program writes, which moves these
+# numbers more than anything else: say which way it was.
+"# defender realtime: $((Get-MpComputerStatus).RealTimeProtectionEnabled)" | Set-Content $out
+"# zipclick: $((Get-Item "C:\bench\ZipClick.exe").VersionInfo.ProductVersion)" | Add-Content $out
+"archive,tool,run,seconds,files,bytes" | Add-Content $out
 
 function Measure-Tree($d) {
   $f = Get-ChildItem -Recurse -File -Force $d -ErrorAction SilentlyContinue

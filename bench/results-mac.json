@@ -1,30 +1,30 @@
 {
  "a.zip": {
-  "ZipClick": 1.45,
-  "7-Zip": 1.6
+  "ZipClick": 0.22,
+  "7-Zip": 1.72
  },
  "aes.zip": {
-  "ZipClick": 1.83,
-  "7-Zip": 2.44
+  "ZipClick": 0.27,
+  "7-Zip": 2.55
  },
  "a.7z": {
-  "ZipClick": 6.39,
-  "7-Zip": 1.9
+  "ZipClick": 7.11,
+  "7-Zip": 2.21
  },
  "a.rar": {
-  "ZipClick": 1.77,
-  "rar": 0.63
+  "ZipClick": 1.91,
+  "rar": 0.7
  },
  "a.tar.gz": {
-  "ZipClick": 1.47,
-  "gzip + tar": 1.19
+  "ZipClick": 1.03,
+  "gzip + tar": 1.3
  },
  "a.tar.xz": {
-  "ZipClick": 4.94,
-  "xz (1 thread) + tar": 2.21
+  "ZipClick": 5.56,
+  "xz (1 thread) + tar": 2.37
  },
  "a.tar.zst": {
-  "ZipClick": 0.25,
-  "zstd + tar": 0.37
+  "ZipClick": 0.31,
+  "zstd + tar": 0.36
  }
 }

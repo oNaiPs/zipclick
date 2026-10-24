@@ -12,7 +12,11 @@ $zc = "$B\ZipClick.exe"
 # Decimal points, not commas, whatever the Windows locale.
 [Threading.Thread]::CurrentThread.CurrentCulture = 'en-US'
 $archives = 'a.zip','aes.zip','a.7z','a.rar','a.tar.gz','a.tar.xz','a.tar.zst'
-"format,tool,run,seconds,files,bytes" | Set-Content $out
+# Defender scans every file an unknown program writes, which moves these
+# numbers more than anything else: say which way it was.
+"# defender realtime: $((Get-MpComputerStatus).RealTimeProtectionEnabled)" | Set-Content $out
+"# zipclick: $((Get-Item $zc).VersionInfo.ProductVersion)" | Add-Content $out
+"format,tool,run,seconds,files,bytes" | Add-Content $out
 
 function Measure-Tree($d) {
   $f = Get-ChildItem -Recurse -File $d -ErrorAction SilentlyContinue

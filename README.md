@@ -34,7 +34,9 @@ ZipClick reads .zip (including password-protected ones, ZipCrypto or AES, and th
 
 ## Limits
 
-.7z, .xz and .rar archives extract several times slower than 7-Zip, because their decoders are written in Go and use one core: 1 GB of files in a .7z takes about 18 seconds instead of 3. Zip, gzip and zstd are close to the native tools, and .zip is faster than Windows' own Extract All. The [benchmark page](https://onaips.github.io/zipclick/benchmark.html) has the numbers against 7-Zip, WinRAR, Bandizip and Windows, and `bench/` has the scripts.
+.7z, .xz and .rar archives extract several times slower than with 7-Zip, because ZipClick's decoders for them are written in Go and use one core: the FFmpeg .7z takes about 6 seconds instead of 1.3. With Defender out of the way, .zip is the fastest of the programs tested, and .tar.gz and .tar.zst are close to the native tools. The [benchmark page](https://onaips.github.io/zipclick/benchmark.html) has the numbers against 7-Zip, WinRAR, Bandizip and Windows, and `bench/` has the scripts.
+
+Microsoft Defender scans every file ZipClick writes, and it scans them far more than the files 7-Zip, WinRAR or Windows' tar write. Archives with thousands of small files, like an SDK or a source tree, extract 5 to 13 times slower with Defender's real-time protection on: the Go zip, 15,657 files, takes about a minute instead of 5 seconds. Archives with a few large files hardly change. Being signed isn't enough on its own (Bandizip is signed, and Defender slows it down about as much), so it may come from how many people run a program, and I don't know how much signing ZipClick would change it. If you know what you're doing, a process exclusion for ZipClick.exe in Windows Security brings back the full speed; the files it writes are then scanned when you open them rather than as they're written. Don't turn real-time protection off for this.
 
 Symbolic links inside an archive are skipped. Self-extracting .exe archives aren't handled.
 
@@ -57,7 +59,7 @@ Set `ZIPCLICK_LANG` (for example `pt-PT`) to force a language.
 
 ## Code signing
 
-ZipClick isn't code-signed. The SignPath Foundation signs open source projects for free, but only once they have a following; ZipClick applied in October 2026 and was told to come back when more people use it. Since 0.4.1, releases are built by GitHub Actions from the tagged source, in the open. ZipClick has no network code and sends nothing anywhere.
+ZipClick isn't code-signed. The SignPath Foundation signs open source projects for free, but only once they have a following; ZipClick applied in October 2026 and was told to come back when more people use it. A certificate of my own costs about €60 a year, which I'll pay if people use ZipClick and ask for it: [open an issue](https://github.com/oNaiPs/zipclick/issues) or star the repository if a signed release matters to you. Since 0.4.1, releases are built by GitHub Actions from the tagged source, in the open. ZipClick has no network code and sends nothing anywhere.
 
 ## Building
 

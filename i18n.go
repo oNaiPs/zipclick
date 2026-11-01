@@ -15,6 +15,7 @@ import (
 
 type messages struct {
 	InstallPrompt, Installed, AlmostDone, Removed string
+	AlmostDoneWindows10                           string // Windows 10, whose Settings has no page per app
 
 	CouldNotExtract string // %s: the archive's name
 	Encrypted       string
@@ -98,7 +99,8 @@ var en = messages{
 	AlmostDone: "Almost done. Windows only lets you choose the default app yourself.\n\n" +
 		"In the Settings page that opens next, click the box under .zip and choose ZipClick. The other archive types are on the same page.\n\n" +
 		"If you skip them, Windows asks the first time you open a .rar or .7z: choose ZipClick, then Always.",
-	Removed: "ZipClick has been removed. Double-clicking a .zip opens it in Explorer again.",
+	AlmostDoneWindows10: "Almost done. Windows only lets you choose the default app yourself.\n\nIn the Settings page that opens next, scroll to the bottom and set the defaults by app: choose ZipClick, then Manage, and change .zip to ZipClick. Check that the other archive types say ZipClick too.",
+	Removed:             "ZipClick has been removed. Double-clicking a .zip opens it in Explorer again.",
 
 	CouldNotExtract: "Could not extract %s.",
 	Encrypted:       "The archive is password-protected.",
@@ -140,7 +142,8 @@ var ptPT = messages{
 	AlmostDone: "Quase pronto. O Windows só deixa que seja o próprio utilizador a escolher a aplicação predefinida.\n\n" +
 		"Na página das Definições que vai abrir, clique na caixa por baixo de .zip e escolha ZipClick. Os outros tipos de arquivo estão na mesma página.\n\n" +
 		"Se os saltar, o Windows pergunta na primeira vez que abrir um .rar ou .7z: escolha ZipClick e depois Sempre.",
-	Removed: "O ZipClick foi removido. Um duplo clique num .zip volta a abri-lo no Explorador de Ficheiros.",
+	AlmostDoneWindows10: "Quase pronto. O Windows só deixa que seja o próprio utilizador a escolher a aplicação predefinida.\n\nNa página das Definições que vai abrir, desça até ao fim e defina as predefinições por aplicação: escolha ZipClick, depois Gerir, e mude o .zip para ZipClick. Confirme que os outros tipos de arquivo também dizem ZipClick.",
+	Removed:             "O ZipClick foi removido. Um duplo clique num .zip volta a abri-lo no Explorador de Ficheiros.",
 
 	CouldNotExtract: "Não foi possível extrair %s.",
 	Encrypted:       "O arquivo está protegido por palavra-passe.",
@@ -182,7 +185,8 @@ var ptBR = messages{
 	AlmostDone: "Quase pronto. O Windows só deixa você mesmo escolher o aplicativo padrão.\n\n" +
 		"Na página de Configurações que vai abrir, clique na caixa abaixo de .zip e escolha ZipClick. Os outros tipos de arquivo compactado estão na mesma página.\n\n" +
 		"Se você pular essa parte, o Windows pergunta na primeira vez que você abrir um .rar ou .7z: escolha ZipClick e depois Sempre.",
-	Removed: "O ZipClick foi removido. Um clique duplo em um .zip volta a abri-lo no Explorador de Arquivos.",
+	AlmostDoneWindows10: "Quase pronto. O Windows só deixa você mesmo escolher o aplicativo padrão.\n\nNa página de Configurações que vai abrir, role até o fim e defina os padrões por aplicativo: escolha ZipClick, depois Gerenciar, e mude o .zip para ZipClick. Confira se os outros tipos de arquivo compactado também mostram ZipClick.",
+	Removed:             "O ZipClick foi removido. Um clique duplo em um .zip volta a abri-lo no Explorador de Arquivos.",
 
 	CouldNotExtract: "Não foi possível extrair %s.",
 	Encrypted:       "O arquivo está protegido por senha.",
@@ -224,7 +228,8 @@ var es = messages{
 	AlmostDone: "Casi listo. Windows solo te deja elegir a ti la aplicación predeterminada.\n\n" +
 		"En la página de Configuración que se abrirá, haz clic en el cuadro bajo .zip y elige ZipClick. Los demás tipos de archivo comprimido están en la misma página.\n\n" +
 		"Si te los saltas, Windows te preguntará la primera vez que abras un .rar o .7z: elige ZipClick y luego Siempre.",
-	Removed: "ZipClick se ha eliminado. Al hacer doble clic en un .zip se vuelve a abrir en el Explorador de archivos.",
+	AlmostDoneWindows10: "Casi listo. Windows solo te deja elegir a ti la aplicación predeterminada.\n\nEn la página de Configuración que se abrirá, baja hasta el final y establece los valores predeterminados por aplicación: elige ZipClick, luego Administrar, y cambia .zip a ZipClick. Comprueba que los demás tipos de archivo comprimido también digan ZipClick.",
+	Removed:             "ZipClick se ha eliminado. Al hacer doble clic en un .zip se vuelve a abrir en el Explorador de archivos.",
 
 	CouldNotExtract: "No se ha podido extraer %s.",
 	Encrypted:       "El archivo está protegido con contraseña.",
@@ -267,7 +272,8 @@ var fr = messages{
 	AlmostDone: "Presque terminé. Windows ne laisse que vous choisir l’application par défaut.\n\n" +
 		"Dans la page Paramètres qui va s’ouvrir, cliquez sur la case sous .zip et choisissez ZipClick. Les autres types d’archive sont sur la même page.\n\n" +
 		"Si vous les laissez de côté, Windows vous le demandera la première fois que vous ouvrirez un .rar ou un .7z : choisissez ZipClick, puis Toujours.",
-	Removed: "ZipClick a été supprimé. Un double-clic sur un .zip l’ouvre à nouveau dans l’Explorateur de fichiers.",
+	AlmostDoneWindows10: "Presque terminé. Windows ne laisse que vous choisir l’application par défaut.\n\nDans la page Paramètres qui va s’ouvrir, descendez tout en bas et définissez les valeurs par défaut par application : choisissez ZipClick, puis Gérer, et associez .zip à ZipClick. Vérifiez que les autres types d’archive indiquent aussi ZipClick.",
+	Removed:             "ZipClick a été supprimé. Un double-clic sur un .zip l’ouvre à nouveau dans l’Explorateur de fichiers.",
 
 	CouldNotExtract: "Impossible d’extraire %s.",
 	Encrypted:       "L’archive est protégée par un mot de passe.",
@@ -309,7 +315,8 @@ var de = messages{
 	AlmostDone: "Fast fertig. Die Standard-App können unter Windows nur Sie selbst festlegen.\n\n" +
 		"Klicken Sie auf der Einstellungsseite, die sich gleich öffnet, auf das Feld unter .zip und wählen Sie ZipClick. Die anderen Archivtypen finden Sie auf derselben Seite.\n\n" +
 		"Wenn Sie sie überspringen, fragt Windows beim ersten Öffnen einer .rar- oder .7z-Datei: Wählen Sie ZipClick und dann Immer.",
-	Removed: "ZipClick wurde entfernt. Ein Doppelklick auf eine .zip-Datei öffnet sie wieder im Datei-Explorer.",
+	AlmostDoneWindows10: "Fast fertig. Die Standard-App können unter Windows nur Sie selbst festlegen.\n\nScrollen Sie auf der Einstellungsseite, die sich gleich öffnet, ganz nach unten und legen Sie die Standardwerte nach App fest: Wählen Sie ZipClick, dann Verwalten, und stellen Sie .zip auf ZipClick um. Prüfen Sie, ob auch bei den anderen Archivtypen ZipClick steht.",
+	Removed:             "ZipClick wurde entfernt. Ein Doppelklick auf eine .zip-Datei öffnet sie wieder im Datei-Explorer.",
 
 	CouldNotExtract: "%s konnte nicht entpackt werden.",
 	Encrypted:       "Das Archiv ist kennwortgeschützt.",
@@ -351,7 +358,8 @@ var it = messages{
 	AlmostDone: "Quasi fatto. Windows permette solo a te di scegliere l’app predefinita.\n\n" +
 		"Nella pagina Impostazioni che si aprirà, fai clic sulla casella sotto .zip e scegli ZipClick. Gli altri tipi di archivio sono nella stessa pagina.\n\n" +
 		"Se li salti, Windows te lo chiederà la prima volta che apri un .rar o un .7z: scegli ZipClick e poi Sempre.",
-	Removed: "ZipClick è stato rimosso. Un doppio clic su un .zip lo apre di nuovo in Esplora file.",
+	AlmostDoneWindows10: "Quasi fatto. Windows permette solo a te di scegliere l’app predefinita.\n\nNella pagina Impostazioni che si aprirà, scorri fino in fondo e imposta i valori predefiniti per app: scegli ZipClick, poi Gestisci, e cambia .zip in ZipClick. Controlla che anche gli altri tipi di archivio indichino ZipClick.",
+	Removed:             "ZipClick è stato rimosso. Un doppio clic su un .zip lo apre di nuovo in Esplora file.",
 
 	CouldNotExtract: "Impossibile estrarre %s.",
 	Encrypted:       "L’archivio è protetto da password.",

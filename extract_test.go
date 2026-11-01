@@ -279,3 +279,29 @@ func TestDetailText(t *testing.T) {
 		}
 	}
 }
+
+// Extracting twice gives a second name: numbered at the end for a folder,
+// whose dots are part of its name, and before the extension for a file.
+func TestASecondExtractionGetsTheNextName(t *testing.T) {
+	dir := t.TempDir()
+	for _, c := range []struct {
+		archive string
+		files   [][2]string
+		second  string
+	}{
+		{"pkg.zip", [][2]string{{"pkg-1.2/a.txt", "a"}}, "pkg-1.2 2"},
+		{"note.zip", [][2]string{{"notes.txt", "n"}}, "notes 2.txt"},
+	} {
+		archive := zipOf(t, dir, c.archive, c.files)
+		if _, err := Extract(archive, "", nil); err != nil {
+			t.Fatal(err)
+		}
+		dst, err := Extract(archive, "", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := filepath.Base(dst); got != c.second {
+			t.Errorf("%s extracted twice: %q, want %q", c.archive, got, c.second)
+		}
+	}
+}

@@ -167,8 +167,12 @@ var errDamaged = errors.New("the archive is damaged")
 // taken, never replacing anything: if a name is claimed between choosing it
 // and the rename, the next one is tried.
 func moveUnique(from, dir, name string) (string, error) {
+	fi, err := os.Lstat(from)
+	if err != nil {
+		return "", err
+	}
 	for range 100 {
-		dst := uniquePath(dir, name)
+		dst := uniquePath(dir, name, fi.IsDir())
 		err := renameNoReplace(from, dst)
 		if err == nil {
 			return dst, nil
@@ -305,15 +309,16 @@ func archiveStem(archive string) string {
 }
 
 // uniquePath returns dir/name, or the first of "name 2", "name 3"... (before
-// the extension, for files) that does not exist yet.
-func uniquePath(dir, name string) string {
+// the extension, for files) that does not exist yet. A folder has no
+// extension: "zipclick-0.4.2" becomes "zipclick-0.4.2 2", not "zipclick-0.4 2.2".
+func uniquePath(dir, name string, isDir bool) string {
 	p := filepath.Join(dir, name)
 	if _, err := os.Lstat(p); errors.Is(err, os.ErrNotExist) {
 		return p
 	}
 	ext := filepath.Ext(name)
 	stem := strings.TrimSuffix(name, ext)
-	if stem == "" { // ".env" is a name, not an extension
+	if stem == "" || isDir { // ".env" is a name, not an extension
 		stem, ext = name, ""
 	}
 	for i := 2; ; i++ {

@@ -206,7 +206,14 @@ func install() error {
 		fmt.Println("registered; choose ZipClick for each type in " + settingsURI)
 		return nil
 	}
-	messageBox(appName, msg.AlmostDone, boxInfo)
+	if windows10() {
+		// Windows 10's Settings has no page for one app, and since 1709 it
+		// will not let a program open the Open with choice for the user:
+		// the steps are on the general page.
+		messageBox(appName, msg.AlmostDoneWindows10, boxInfo)
+	} else {
+		messageBox(appName, msg.AlmostDone, boxInfo)
+	}
 	return windows.ShellExecute(0, utf16("open"), utf16(settingsURI), nil, nil, windows.SW_SHOWNORMAL)
 }
 
@@ -519,4 +526,9 @@ func markZone(path string, zone []byte) {
 	if zone != nil {
 		_ = os.WriteFile(path+zoneStream, zone, 0o644)
 	}
+}
+
+// windows10 reports a Windows before 11, whose first build is 22000.
+func windows10() bool {
+	return windows.RtlGetVersion().BuildNumber < 22000
 }

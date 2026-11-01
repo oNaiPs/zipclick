@@ -14,9 +14,11 @@ Download [ZipClick.exe](https://github.com/oNaiPs/zipclick/releases/latest/downl
 
 The other types are on the same Settings page. If you leave them, Windows asks the first time you open a .rar or .7z which app to use: choose ZipClick, then Always.
 
+On Windows 10 that page has no section for one app: scroll to the bottom, click Set defaults by app, choose ZipClick, then Manage, and change .zip there. The other types usually say ZipClick already, since Windows 10 has nothing else to open them with.
+
 The exe isn't code-signed yet, so SmartScreen warns the first time you run it. Click More info, then Run anyway.
 
-To remove it, go to Settings > Apps > Installed apps, find ZipClick and choose Uninstall.
+To remove it, go to Settings > Apps > Installed apps (Apps & features on Windows 10), find ZipClick and choose Uninstall.
 
 ## What happens when you double-click
 
